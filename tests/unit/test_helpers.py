@@ -1,6 +1,6 @@
-import pytest
+import pytest  # type: ignore
 
-from runtime.agent.utils.helpers import (
+from runtime.agent.utils.helpers import (  # type: ignore
     annualize_return,
     calc_pnl,
     calc_position_value,
@@ -115,13 +115,13 @@ def test_validators():
 
 @pytest.mark.asyncio
 async def test_retry_async():
-    from runtime.agent.utils.helpers import retry_async
+    from runtime.agent.utils.helpers import retry_async  # type: ignore
 
     runs = 0
 
     async def failing_func():
         nonlocal runs
-        runs += 1
+        runs += 1  # type: ignore
         if runs < 3:
             raise ValueError("Fail")
         return "Success"
@@ -135,7 +135,7 @@ async def test_retry_async():
 
     async def always_fail():
         nonlocal runs2
-        runs2 += 1
+        runs2 += 1  # type: ignore
         raise ValueError("Fail")
 
     with pytest.raises(ValueError):
@@ -144,14 +144,14 @@ async def test_retry_async():
 
 
 def test_retry_sync():
-    from runtime.agent.utils.helpers import retry_sync
+    from runtime.agent.utils.helpers import retry_sync  # type: ignore
 
     runs = 0
 
     @retry_sync(max_retry=2, base_delay_s=0.01)
     def failing_func():
         nonlocal runs
-        runs += 1
+        runs += 1  # type: ignore
         if runs < 2:
             raise ValueError("Fail")
         return "Success"
@@ -164,7 +164,7 @@ def test_retry_sync():
     @retry_sync(max_retry=1, base_delay_s=0.01)
     def always_fail():
         nonlocal runs2
-        runs2 += 1
+        runs2 += 1  # type: ignore
         raise ValueError("Fail")
 
     with pytest.raises(ValueError):

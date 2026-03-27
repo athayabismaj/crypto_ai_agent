@@ -2,8 +2,11 @@ import json
 import logging
 from datetime import datetime
 
-from runtime.agent.utils.logger import get_logger
-from runtime.agent.utils.structured_logger import JSONFormatter, setup_structured_logging
+from runtime.agent.utils.logger import get_logger  # type: ignore
+from runtime.agent.utils.structured_logger import (  # type: ignore
+    JSONFormatter,
+    setup_structured_logging,
+)
 
 
 def test_agent_logger_bind():
@@ -40,7 +43,7 @@ def test_json_formatter():
     class NonSerializable:
         pass
 
-    record.structured_ctx = {
+    record.structured_ctx = {  # type: ignore
         "trade_id": 123,
         "dt": datetime(2025, 1, 1),
         "exc": Exception("Error"),

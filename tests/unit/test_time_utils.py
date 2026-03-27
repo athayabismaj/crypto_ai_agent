@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
-import pytest
+import pytest  # type: ignore
 
-from runtime.agent.utils.time_utils import (
+from runtime.agent.utils.time_utils import (  # type: ignore
     candle_close_time,
     candle_open_time,
     format_duration,

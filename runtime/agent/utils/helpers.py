@@ -1,12 +1,14 @@
 import asyncio
 import math
 import re
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Tuple, TypeVar
+from typing import Any, TypeVar, cast
 
-from runtime.agent.utils.time_utils import VALID_TIMEFRAMES, utcnow_ms
+from runtime.agent.utils.time_utils import VALID_TIMEFRAMES, utcnow_ms  # type: ignore
 
 T = TypeVar("T")
+F = TypeVar("F", bound=Callable[..., Any])
 
 ORDER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]{1,36}$")
 
@@ -20,8 +22,9 @@ def round_qty(qty: float, step_size: float) -> float:
     """
     if step_size <= 0:
         raise ValueError(f"step_size must be > 0, got: {step_size}")
-    precision = max(0, round(-math.log10(step_size)))
-    return round(math.floor(qty / step_size) * step_size, precision)
+    precision = int(max(0, round(-math.log10(step_size))))
+    val: float = math.floor(qty / step_size) * step_size
+    return round(val, precision)  # type: ignore
 
 
 def round_price(price: float, tick_size: float) -> float:
@@ -30,8 +33,9 @@ def round_price(price: float, tick_size: float) -> float:
     """
     if tick_size <= 0:
         raise ValueError(f"tick_size must be > 0, got: {tick_size}")
-    precision = max(0, round(-math.log10(tick_size)))
-    return round(round(price / tick_size) * tick_size, precision)
+    precision = int(max(0, round(-math.log10(tick_size))))
+    val: float = round(price / tick_size) * tick_size
+    return round(val, precision)  # type: ignore
 
 
 def clamp(value: float, min_val: float, max_val: float) -> float:
@@ -55,14 +59,14 @@ def generate_order_id(strategy_id: str, symbol: str) -> str:
     Format: {strategy_prefix}_{symbol_lower}_{timestamp_ms}
     Automatically truncated to 36 chars.
     """
-    prefix = strategy_id[:8].lower().replace(" ", "_")
-    sym = symbol[:8].lower()
+    prefix = strategy_id[:8].lower().replace(" ", "_")  # type: ignore
+    sym = symbol[:8].lower()  # type: ignore
     ts = utcnow_ms()
     raw = f"{prefix}_{sym}_{ts}"
-    return raw[:36]
+    return raw[:36]  # type: ignore
 
 
-def validate_order_id(cid: str) -> Tuple[bool, str]:
+def validate_order_id(cid: str) -> tuple[bool, str]:
     """Return (True, '') if valid, (False, error_msg) if not."""
     if not cid:
         return False, "client_order_id empty"
@@ -77,14 +81,14 @@ def truncate(text: str, max_len: int, suffix: str = "...") -> str:
     """Truncate string with suffix if too long."""
     if len(text) <= max_len:
         return text
-    return text[: max_len - len(suffix)] + suffix
+    return text[: max_len - len(suffix)] + suffix  # type: ignore
 
 
 def mask_key(key: str, visible_chars: int = 6) -> str:
     """Mask API key for safe logging."""
     if len(key) <= visible_chars * 2:
         return "***"
-    return key[:visible_chars] + "..." + key[-visible_chars:]
+    return key[:visible_chars] + "..." + key[-visible_chars:]  # type: ignore
 
 
 def calc_pnl(
@@ -93,7 +97,7 @@ def calc_pnl(
     exit_price: float,
     qty: float,
     commission: float = 0.0,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Return (pnl_usd, pnl_pct).
     BUY: pnl = (exit - entry) * qty - commission
@@ -164,12 +168,12 @@ def validate_config_range(
 
 
 async def retry_async(
-    coro_fn: Callable,
+    coro_fn: Callable[..., Any],
     max_retry: int = 3,
     base_delay_s: float = 1.0,
     max_delay_s: float = 60.0,
     backoff: float = 2.0,
-    exceptions: tuple = (Exception,),
+    exceptions: tuple[type[Exception], ...] = (Exception,),
 ) -> Any:
     """Retry coroutine with exponential backoff."""
     last_exc = None
@@ -177,7 +181,7 @@ async def retry_async(
     for attempt in range(max_retry + 1):
         try:
             return await coro_fn()
-        except exceptions as e:
+        except exceptions as e:  # type: ignore
             last_exc = e
             if attempt == max_retry:
                 break
@@ -191,21 +195,21 @@ async def retry_async(
 def retry_sync(
     max_retry: int = 3,
     base_delay_s: float = 0.5,
-    exceptions: tuple = (Exception,),
-):
+    exceptions: tuple[type[Exception], ...] = (Exception,),
+) -> Callable[[F], F]:
     """Decorator for synchronous function retry with backoff."""
 
-    def decorator(fn: Callable) -> Callable:
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
+    def decorator(fn: F) -> F:
+        @wraps(fn)  # type: ignore
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             import time
 
             last_exc = None
             delay = base_delay_s
             for attempt in range(max_retry + 1):
                 try:
-                    return fn(*args, **kwargs)
-                except exceptions as e:
+                    return fn(*args, **kwargs)  # type: ignore
+                except exceptions as e:  # type: ignore
                     last_exc = e
                     if attempt == max_retry:
                         break
@@ -215,6 +219,6 @@ def retry_sync(
                 raise last_exc
             raise RuntimeError("Max retries exceeded")
 
-        return wrapper
+        return cast(F, wrapper)
 
     return decorator

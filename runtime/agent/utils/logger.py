@@ -1,6 +1,6 @@
 import copy
 import logging
-from typing import Any, Dict
+from typing import Any
 
 
 class AgentLogger:
@@ -9,7 +9,7 @@ class AgentLogger:
     Semua method menerima **kwargs untuk structured context.
     """
 
-    def __init__(self, name: str, context: Dict[str, Any] = None):
+    def __init__(self, name: str, context: dict[str, Any] | None = None):
         self._logger = logging.getLogger(name)
         self._context = context or {}
 

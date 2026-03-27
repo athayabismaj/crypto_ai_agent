@@ -81,7 +81,7 @@ Sebelum implement layer apapun, baca dokumen ini:
 ## Status Layer (update saat layer selesai)
 - [x] utils/
 - [x] security/
-- [ ] core/
+- [x] core/
 - [ ] data_layer/
 - [ ] intelligence_layer/
 - [ ] strategy_layer/

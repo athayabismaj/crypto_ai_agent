@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 # Internal clock - can be overridden for testing
-_mock_time: Optional[datetime] = None
+_mock_time: datetime | None = None
 
 VALID_TIMEFRAMES = {"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "1d"}
 
@@ -75,7 +74,7 @@ def candle_close_time(ts: datetime, tf: str) -> datetime:
     return open_time + timedelta(milliseconds=ms_delta)
 
 
-def is_new_candle(ts: datetime, tf: str, prev_ts: Optional[datetime]) -> bool:
+def is_new_candle(ts: datetime, tf: str, prev_ts: datetime | None) -> bool:
     """True if ts and prev_ts are in different candles."""
     if prev_ts is None:
         return True
@@ -104,7 +103,7 @@ def format_duration(seconds: int) -> str:
     return f"{hours}h {secs}s" if secs else f"{hours}h"
 
 
-def is_daily_reset_due(last_reset: Optional[datetime]) -> bool:
+def is_daily_reset_due(last_reset: datetime | None) -> bool:
     """True if UTC 00:00 has passed since last_reset."""
     now = utcnow()
     if last_reset is None:

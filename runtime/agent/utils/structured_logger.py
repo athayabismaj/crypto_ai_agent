@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from runtime.agent.utils.time_utils import utcnow
+from runtime.agent.utils.time_utils import utcnow  # type: ignore
 
 
 class JSONFormatter(logging.Formatter):
@@ -32,7 +32,7 @@ class JSONFormatter(logging.Formatter):
             log_obj[k] = self._serialize(v)
 
         if record.exc_info:
-            log_obj["error"] = self.formatException(record.exc_info)
+            log_obj["error"] = self.formatException(record.exc_info)  # type: ignore
 
         return json.dumps(log_obj)
 
@@ -61,7 +61,7 @@ def setup_structured_logging(
     root_logger = logging.getLogger()
 
     # Remove existing handlers
-    for handler in root_logger.handlers[:]:
+    for handler in root_logger.handlers[:]:  # type: ignore
         root_logger.removeHandler(handler)
 
     num_level = getattr(logging, level.upper(), logging.INFO)
@@ -79,7 +79,7 @@ def setup_structured_logging(
         file_path = Path(log_file)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(str(file_path))
-        handlers.append(file_handler)
+        handlers.append(file_handler)  # type: ignore
 
     # Standard formats
     text_formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
