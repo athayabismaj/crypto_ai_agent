@@ -1,0 +1,35 @@
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "critical: Test wajib lulus sebelum deploy",
+    "slow: Test lambat",
+    "live_only: Butuh koneksi exchange nyata",
+]
+
+[tool.coverage.run]
+source = ["runtime/agent"]
+omit = ["*/tests/*", "*/__init__.py", "*/mocks/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "pass",
+    "\\.\\.\\.",
+]

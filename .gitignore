@@ -1,0 +1,38 @@
+# Environment
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Database (jangan commit data live)
+*.db
+*.db-journal
+
+# Model files (terlalu besar untuk git)
+*.pkl
+*.pkl.placeholder
+!*.pkl.example
+
+# Logs
+logs/
+*.log
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — WAJIB
+.env
+*.key
+*.pem
