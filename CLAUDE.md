@@ -79,7 +79,7 @@ Sebelum implement layer apapun, baca dokumen ini:
 - semua layer lain    → minimal 85%
 
 ## Status Layer (update saat layer selesai)
-- [ ] utils/
+- [x] utils/
 - [ ] security/
 - [ ] core/
 - [ ] data_layer/
