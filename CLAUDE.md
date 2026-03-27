@@ -80,7 +80,7 @@ Sebelum implement layer apapun, baca dokumen ini:
 
 ## Status Layer (update saat layer selesai)
 - [x] utils/
-- [ ] security/
+- [x] security/
 - [ ] core/
 - [ ] data_layer/
 - [ ] intelligence_layer/
