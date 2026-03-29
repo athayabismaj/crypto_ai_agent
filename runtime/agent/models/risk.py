@@ -1,110 +1,66 @@
 """
-Risk layer I/O models — TradeRequest dan RiskResult.
-
-TradeRequest = input ke RiskManager (dari Signal).
-RiskResult   = output dari evaluasi risk.
+Model data untuk Risk Layer
+Mendefinisikan input (TradeRequest) dan output (RiskResult) dari evaluasi risiko.
 """
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field  # type: ignore
+if TYPE_CHECKING:
+    from runtime.agent.models.signal import Signal  # type: ignore
 
 from runtime.agent.models.enums import RiskVerdict  # type: ignore
 
 
-class TradeRequest(BaseModel):
-    """
-    Input ke risk_layer untuk evaluasi.
+@dataclass
+class RiskResult:
+    verdict: RiskVerdict
+    approved_quantity: float = 0.0  # qty final setelah sizing (0 jika BLOCKED)
+    risk_amount_usd: float = 0.0  # estimasi max loss dalam USD
+    sl_price: float = 0.0  # SL yang divalidasi / dikalkulasi
+    tp_price: float = 0.0  # TP yang divalidasi (0 = tidak ada)
+    reasons: list[str] = field(default_factory=list)  # alasan block (kosong jika APPROVED)
+    warnings: list[str] = field(default_factory=list)  # peringatan (tetap bisa lanjut)
+    sizing_method: str = ""  # metode ukuran yang digunakan
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    Biasanya dibangun via `from_signal()` oleh trade_layer
-    sebelum dikirim ke risk_layer.evaluate().
-    """
+    @property
+    def is_approved(self) -> bool:
+        return self.verdict != RiskVerdict.BLOCKED
 
-    model_config = ConfigDict(frozen=True)
+    @property
+    def has_warnings(self) -> bool:
+        return len(self.warnings) > 0
 
+
+@dataclass
+class TradeRequest:
     symbol: str
     side: str  # 'BUY' | 'SELL'
-    strategy_id: str
-    confidence: float
-    signal_type: str = "market"
-
-    # Price levels dari signal
-    suggested_price: float = 0.0
-    suggested_sl: float = 0.0
+    quantity: float  # qty yang diminta (bisa di-scale down)
+    price: float = 0.0  # 0.0 = market order
+    suggested_sl: float = 0.0  # dari Signal.suggested_sl
     suggested_tp: float = 0.0
-
-    # Context saat ini
-    current_price: float = 0.0
-    atr: float = 0.0
-    regime: str = ""
-    vol_regime: str = ""
-    available_equity: float = 0.0
-
-    metadata: dict = Field(default_factory=dict)  # type: ignore[assignment]
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    leverage: int = 1  # 1 untuk spot
+    is_futures: bool = False
+    strategy_id: str = ""
+    client_order_id: str = ""  # diisi sebelum dikirim ke idempotency
+    signal_confidence: float = 0.0
 
     @classmethod
     def from_signal(
         cls,
-        signal: "object",
-        current_price: float = 0.0,
-        atr: float = 0.0,
-        available_equity: float = 0.0,
+        signal: "Signal",  # Dicuplik dari model Strategy Layer
+        quantity: float,
     ) -> "TradeRequest":
-        """Buat TradeRequest dari objek Signal."""
-        kwargs = {
-            "symbol": getattr(signal, "symbol", ""),
-            "side": getattr(signal, "side", ""),
-            "strategy_id": getattr(signal, "strategy_id", ""),
-            "confidence": getattr(signal, "final_confidence", 0.0),
-            "signal_type": getattr(signal, "signal_type", "market"),
-            "suggested_price": getattr(signal, "suggested_price", 0.0),
-            "suggested_sl": getattr(signal, "suggested_sl", 0.0),
-            "suggested_tp": getattr(signal, "suggested_tp", 0.0),
-            "current_price": current_price,
-            "atr": atr,
-            "regime": getattr(signal, "regime", ""),
-            "vol_regime": getattr(signal, "vol_regime", ""),
-            "available_equity": available_equity,
-        }
-        return cls(**kwargs)  # type: ignore[arg-type]
-
-
-class RiskResult(BaseModel):
-    """
-    Output dari risk_layer.evaluate().
-
-    Berisi keputusan risk (approved/warned/blocked),
-    quantity yang disetujui, dan alasan.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    verdict: RiskVerdict = RiskVerdict.BLOCKED
-    approved_quantity: float = 0.0
-    risk_amount_usd: float = 0.0
-    risk_pct: float = 0.0  # % dari equity yang dipertaruhkan
-
-    # Price levels (bisa di-override dari suggested)
-    stop_loss: float = 0.0
-    take_profit: float = 0.0
-
-    # Sizing detail
-    sizing_method: str = ""  # 'atr_pct' | 'fixed_usd' | 'kelly'
-    position_value_usd: float = 0.0
-    leverage_used: int = 1
-
-    # Alasan
-    reasons: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-    @computed_field  # type: ignore[prop-decorator, misc]
-    @property
-    def is_approved(self) -> bool:
-        return self.verdict in (RiskVerdict.APPROVED, RiskVerdict.WARNED)
-
-    @computed_field  # type: ignore[prop-decorator, misc]
-    @property
-    def has_warnings(self) -> bool:
-        return len(self.warnings) > 0
+        return cls(
+            symbol=signal.symbol,
+            side=signal.side,
+            quantity=quantity,
+            price=signal.suggested_price,
+            suggested_sl=signal.suggested_sl,
+            suggested_tp=signal.suggested_tp,
+            strategy_id=signal.strategy_id,
+            signal_confidence=signal.final_confidence,
+        )
