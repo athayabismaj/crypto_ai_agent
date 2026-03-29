@@ -79,13 +79,14 @@ Sebelum implement layer apapun, baca dokumen ini:
 - semua layer lain    → minimal 85%
 
 ## Status Layer (update saat layer selesai)
-- [ ] utils/
-- [ ] security/
-- [ ] core/
-- [ ] data_layer/
-- [ ] intelligence_layer/
-- [ ] strategy_layer/
-- [ ] portfolio_layer/
+- [x] utils/
+- [x] security/
+- [x] core/
+- [x] models/
+- [x] data_layer/
+- [x] intelligence_layer/
+- [x] strategy_layer/
+- [x] portfolio_layer/
 - [ ] risk_layer/
 - [ ] trade_layer/
 - [ ] execution_layer/

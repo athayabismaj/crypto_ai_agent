@@ -7,6 +7,7 @@ RegimeResult, RateLimitStatus.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field  # type: ignore
 
@@ -240,3 +241,112 @@ class RateLimitStatus(BaseModel):
     orders_1d: int = 0
     seconds_to_reset: float = 0.0
     is_near_limit: bool = False
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Latency Guard & Portfolio Mocks
+# ══════════════════════════════════════════════════════════════════════
+
+
+class LatencyStatus(BaseModel):
+    """Snapshot latensi eksekusi dan market data."""
+
+    model_config = ConfigDict(frozen=True)
+
+    ws_latency_ms: float = 0.0
+    rest_latency_ms: float = 0.0
+    order_latency_ms: float = 0.0
+    tick_latency_ms: float = 0.0
+    overall_status: str = "ok"  # 'ok' | 'degraded' | 'high' | 'critical'
+    should_block_trading: bool = False
+    warnings: list[str] = Field(default_factory=list)
+
+
+class Position(BaseModel):
+    """Mock for Portfolio Position."""
+
+    model_config = ConfigDict(frozen=True)
+
+    symbol: str
+    side: str
+    quantity: float
+    entry_price: float
+    unrealized_pnl: float = 0.0
+
+
+class PortfolioState(BaseModel):
+    """Mock for Portfolio State."""
+
+    model_config = ConfigDict(frozen=True)
+
+    total_equity: float = 0.0
+    available_equity: float = 0.0
+    daily_pnl: float = 0.0
+    open_positions: dict[str, Position] = Field(default_factory=dict)
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Market State (Aggregated output of Intelligence Layer)
+# ══════════════════════════════════════════════════════════════════════
+
+
+class MarketState(BaseModel):
+    """Aggregasi seluruh informasi market untuk dikonsumsi Strategy Layer."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    # ── Identitas ───────────────────────────────────────────
+    symbol: str
+    timeframe: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # ── Price & Market ──────────────────────────────────────
+    last_price: float = 0.0
+    bid: float = 0.0
+    ask: float = 0.0
+    mid: float = 0.0
+    spread_pct: float = 0.0
+    volume_24h: float = 0.0
+    orderbook_imbalance: float = 0.0  # -1.0 to +1.0
+
+    # ── Candle Data ─────────────────────────────────────────
+    latest_candle: Candle
+    candles_df: Any = None  # pd.DataFrame
+
+    # ── Intelligence ────────────────────────────────────────
+    regime: MarketRegime = MarketRegime.UNDEFINED
+    regime_confidence: float = 0.0
+    regime_stable: bool = False
+    vol_metrics: VolatilityMetrics
+
+    @computed_field  # type: ignore[prop-decorator, misc]
+    @property
+    def atr(self) -> float:
+        return self.vol_metrics.atr
+
+    @computed_field  # type: ignore[prop-decorator, misc]
+    @property
+    def atr_percentile(self) -> float:
+        return self.vol_metrics.atr_percentile
+
+    @computed_field  # type: ignore[prop-decorator, misc]
+    @property
+    def vol_regime(self) -> str:
+        return self.vol_metrics.vol_regime
+
+    # ── Features (untuk model ML) ───────────────────────────
+    features: Any = None  # pd.Series
+
+    # ── Portfolio Context ────────────────────────────────────
+    open_positions: dict[str, Position] = Field(default_factory=dict)
+    available_equity: float = 0.0
+    equity: float = 0.0
+    daily_pnl: float = 0.0
+
+    # ── Anomaly & Safety ────────────────────────────────────
+    active_anomalies: list[AnomalyReport] = Field(default_factory=list)
+    is_safe_to_trade: bool = True
+
+    # ── Metadata ────────────────────────────────────────────
+    data_quality: str = "good"  # 'good' | 'degraded' | 'bad'
+    latency_ms: float = 0.0
