@@ -1,165 +1,118 @@
 """
-Market Regime Classification.
-
-Mengklasifikasikan kondisi market:
-- STRONG_TREND_UP, WEAK_TREND_UP
-- SIDEWAYS
-- WEAK_TREND_DOWN, STRONG_TREND_DOWN
-- HIGH_VOLATILITY (override)
-- UNDEFINED
+Layer Intelligence: Regime Classifier
+Mengklasifikasikan Kondisi Trend Pasar berdasarkan Average Directional Index (ADX) 
+dan Exponential Moving Average (EMA).
+Dilengkapi dengan override Volatilitas Ekstrem.
 """
 
-import pandas as pd  # type: ignore
+from dataclasses import dataclass
+from enum import Enum
 
-from runtime.agent.models.enums import MarketRegime
-from runtime.agent.models.market import RegimeResult
+import numpy as np
+import pandas as pd
+
+from runtime.agent.core.config_schema import AgentConfig  # type: ignore
+
+
+class MarketRegime(Enum):
+    STRONG_TREND_UP = "strong_trend_up"
+    WEAK_TREND_UP = "weak_trend_up"
+    SIDEWAYS = "sideways"
+    WEAK_TREND_DOWN = "weak_trend_down"
+    STRONG_TREND_DOWN = "strong_trend_down"
+    HIGH_VOLATILITY = "high_volatility"  # override semua regime lain
+    UNDEFINED = "undefined"  # data tidak cukup
+
+
+@dataclass
+class RegimeResult:
+    regime: MarketRegime
+    confidence: float
+    adx: float
+    adx_trend: str
+    ema50_distance: float
+    is_stable: bool
+    lookback_candles: int
 
 
 class RegimeClassifier:
-    """Classifier rejim pasar berbasis ADX dan jarak EMA."""
+    """Mesin Klasifikasi Iklim Pasar (Trend/Sideways)."""
 
-    def __init__(self) -> None:
-        """Inisialisasi konstanta."""
-        self.adx_period = 14
-        self.ema_trend_period = 50
-        self.adx_strong_threshold = 30
-        self.adx_weak_threshold = 20
-        self.high_vol_percentile = 85.0
-        self.stability_candles = 5
-        self.min_history_candles = 200
+    def __init__(self, config: AgentConfig) -> None:
+        self.config = config
+        self.adx_period = getattr(config, "strat_adx_period", 14)
+        self.ema_period = getattr(config, "strat_ema_trend_period", 50)
+        self.adx_strong = getattr(config, "strat_adx_strong", 30.0)
+        self.adx_weak = getattr(config, "strat_adx_weak", 20.0)
+        self.high_vol_percentile = getattr(config, "strat_high_vol_percentile", 85.0)
+        self.min_history = getattr(config, "strat_min_history_candles", 200)
 
-    def classify(self, df: pd.DataFrame, atr_percentile: float = 0.0) -> RegimeResult:
-        """Klasifikasi regimen pasar utama."""
-        if df is None or len(df) < self.min_history_candles:
-            return RegimeResult(regime=MarketRegime.UNDEFINED)
+        # state internal (track is_stable)
+        self.last_regimes: list[MarketRegime] = []
+        self.STABILITY_PERIOD = 5
 
-        adx_series, dip_series, dim_series = self._calculate_adx(df, self.adx_period)
-        ema50_series = df["close"].ewm(span=self.ema_trend_period, adjust=False).mean()
+    def _calculate_adx(self, df: pd.DataFrame, period: int) -> pd.DataFrame:
+        """Kalkulasi ADX via numpy vector (RMA smoothing)."""
+        high = df["high"].values
+        low = df["low"].values
+        close = df["close"].values
 
-        current_adx = float(adx_series.iloc[-1])
-        current_close = float(df["close"].iloc[-1])
-        current_ema50 = float(ema50_series.iloc[-1])
+        # Plus/Minus Directional Movement (DM)
+        up_move = np.zeros_like(high)
+        down_move = np.zeros_like(low)
 
-        # Hitung sejarah ADX slope
-        adx_sma = adx_series.rolling(3).mean()
-        if adx_sma.iloc[-1] > adx_sma.iloc[-2]:
-            adx_trend = "rising"
-        elif adx_sma.iloc[-1] < adx_sma.iloc[-2]:
-            adx_trend = "falling"
-        else:
-            adx_trend = "flat"
+        up_move[1:] = high[1:] - high[:-1]
+        down_move[1:] = low[:-1] - low[1:]
 
-        ema50_distance = ((current_close - current_ema50) / current_ema50) * 100
+        pdm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+        ndm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
 
-        # Tentukan base regime
-        base_regime = self._determine_base_regime(current_adx, current_close, current_ema50)
+        # True Range
+        tr = np.zeros_like(close)
+        tr[0] = high[0] - low[0]
+        for i in range(1, len(close)):
+            tr[i] = max(high[i] - low[i], abs(high[i] - close[i - 1]), abs(low[i] - close[i - 1]))
 
-        # Override Volatilitas
-        final_regime = base_regime
-        if atr_percentile > self.high_vol_percentile:
-            final_regime = MarketRegime.HIGH_VOLATILITY
+        # RMA Smoothing
+        def rma(arr: np.ndarray, prd: int) -> np.ndarray:
+            res = np.zeros_like(arr)
+            # Init SMA (mock first prd)
+            if len(arr) > prd:
+                res[prd - 1] = np.mean(arr[:prd])
+                for i in range(prd, len(arr)):
+                    res[i] = (res[i - 1] * (prd - 1) + arr[i]) / prd
+            return res
 
-        # Evaluasi stabilitas (cek 5 candle terakhir)
-        is_stable = self._check_stability(df, adx_series, ema50_series, atr_percentile)
+        tr_rma = rma(tr, period)
+        pdm_rma = rma(pdm, period)
+        ndm_rma = rma(ndm, period)
 
-        # Hitung confidence score
-        confidence = self._calculate_confidence(
-            current_adx,
-            ema50_distance,
-            adx_trend,
-            is_stable,
-        )
+        # DI+, DI-
+        pdi = np.zeros_like(tr_rma)
+        ndi = np.zeros_like(tr_rma)
 
-        return RegimeResult(
-            regime=final_regime,
-            confidence=confidence,
-            adx=current_adx,
-            adx_trend=adx_trend,
-            ema50_distance=ema50_distance,
-            is_stable=is_stable,
-            lookback_candles=len(df),
-        )
+        valid = tr_rma > 0
+        pdi[valid] = 100 * pdm_rma[valid] / tr_rma[valid]
+        ndi[valid] = 100 * ndm_rma[valid] / tr_rma[valid]
 
-    def classify_multi_tf(self, df_h1: pd.DataFrame, df_h4: pd.DataFrame) -> RegimeResult:
-        """
-        Klasifikasi menggunakan dua timeframe.
-        H4 = utama, H1 = konfirmasi.
-        Bila bertentangan = Sideways
-        """
-        res_h4 = self.classify(df_h4, atr_percentile=50.0)  # simplify
-        res_h1 = self.classify(df_h1, atr_percentile=50.0)
+        # DX & ADX
+        dx = np.zeros_like(pdi)
+        di_sum = pdi + ndi
+        valid_di = di_sum > 0
+        dx[valid_di] = 100 * np.abs(pdi[valid_di] - ndi[valid_di]) / di_sum[valid_di]
 
-        # Konflik deteksi tren
-        if ("UP" in res_h4.regime.value and "DOWN" in res_h1.regime.value) or (
-            "DOWN" in res_h4.regime.value and "UP" in res_h1.regime.value
-        ):
-            return RegimeResult(
-                regime=MarketRegime.SIDEWAYS,
-                confidence=min(res_h4.confidence, res_h1.confidence) * 0.5,  # Reduced confidence
-            )
+        adx = rma(dx, period)
 
-        # Mengembalikan dari H4 dengan penyesuaian stabilitas
-        return res_h4
-
-    def is_regime_change(self, prev: MarketRegime, curr: MarketRegime) -> bool:
-        """Sinyal pergerakan signifikan antara regime."""
-        if prev == curr:
-            return False
-        # Sideways -> Weak is minor. Weak -> Strong is minor.
-        # UP -> DOWN is major. Strong UP -> Sideways is major.
-        # Pokoknya beda = True
-        return True
-
-    def _determine_base_regime(self, adx: float, close: float, ema50: float) -> MarketRegime:
-        """Kondisional regime menurut spesifikasi dokumen."""
-        if adx < self.adx_weak_threshold:
-            return MarketRegime.SIDEWAYS
-
-        if adx >= self.adx_strong_threshold:
-            if close > ema50:
-                return MarketRegime.STRONG_TREND_UP
-            else:
-                return MarketRegime.STRONG_TREND_DOWN
-
-        if self.adx_weak_threshold <= adx < self.adx_strong_threshold:
-            if close > ema50:
-                return MarketRegime.WEAK_TREND_UP
-            else:
-                return MarketRegime.WEAK_TREND_DOWN
-
-        return MarketRegime.SIDEWAYS
-
-    def _check_stability(
-        self,
-        df: pd.DataFrame,
-        adx_series: pd.Series,
-        ema50_series: pd.Series,
-        atr_percentile: float,
-    ) -> bool:
-        """Cek apakah 5 candle terakhir stabil regime-nya."""
-        if len(df) < self.stability_candles:
-            return False
-
-        last_regimes = []
-        for i in range(1, self.stability_candles + 1):
-            idx = -i
-            adx = float(adx_series.iloc[idx])
-            close = float(df["close"].iloc[idx])
-            ema50 = float(ema50_series.iloc[idx])
-            br = self._determine_base_regime(adx, close, ema50)
-            if atr_percentile > self.high_vol_percentile:
-                br = MarketRegime.HIGH_VOLATILITY
-            last_regimes.append(br)
-
-        # Stable jika semua item dalam list tersebut sama
-        return len(set(last_regimes)) == 1
+        res_df = pd.DataFrame(index=df.index)
+        res_df["adx"] = adx
+        return res_df
 
     def _calculate_confidence(
         self, adx: float, ema_distance: float, adx_trend: str, stability: bool
     ) -> float:
-        """Menghitung skor probabilitas ketepatan dari sinyal ADX."""
         score = 0.0
 
+        # ADX strength (0.0 -- 0.4)
         if adx > 40:
             score += 0.40
         elif adx > 30:
@@ -169,50 +122,94 @@ class RegimeClassifier:
         else:
             score += 0.05
 
+        # EMA distance (0.0 -- 0.3)
         score += min(abs(ema_distance) / 5.0, 0.30)
 
+        # ADX trend (0.0 -- 0.2)
         if adx_trend == "rising":
             score += 0.20
         elif adx_trend == "flat":
             score += 0.10
 
+        # Stability bonus (0.0 -- 0.1)
         if stability:
             score += 0.10
 
         return min(score, 1.0)
 
-    def _calculate_adx(
-        self, df: pd.DataFrame, period: int = 14
-    ) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Wilder's ADX Calculation."""
-        high = df["high"]
-        low = df["low"]
-        close = df["close"]
+    def classify(self, df: pd.DataFrame, current_atr_percentile: float = 0.0) -> RegimeResult:
+        """Menghitung regime untuk barisan harga terkini."""
+        if len(df) < self.min_history:
+            return RegimeResult(MarketRegime.UNDEFINED, 0.0, 0.0, "flat", 0.0, False, len(df))
 
-        tr1 = high - low
-        tr2 = (high - close.shift(1)).abs()
-        tr3 = (low - close.shift(1)).abs()
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        # 1. Base Regimes via ADX & EMA
+        adx_df = self._calculate_adx(df, self.adx_period)
 
-        up_move = high - high.shift(1)
-        down_move = low.shift(1) - low
+        curr_adx = float(adx_df["adx"].iloc[-1])
+        prev_adx_3 = adx_df["adx"].iloc[-4:-1].mean()  # Rata-rata 3 candle lalu
 
-        plus_dm = pd.Series(0.0, index=df.index)
-        minus_dm = pd.Series(0.0, index=df.index)
+        adx_trend_str = "flat"
+        if curr_adx > prev_adx_3 + 1.0:
+            adx_trend_str = "rising"
+        elif curr_adx < prev_adx_3 - 1.0:
+            adx_trend_str = "falling"
 
-        plus_dm[(up_move > down_move) & (up_move > 0)] = up_move
-        minus_dm[(down_move > up_move) & (down_move > 0)] = down_move
+        # EMA
+        ema = df["close"].ewm(span=self.ema_period, adjust=False).mean()
+        curr_ema = float(ema.iloc[-1])
+        curr_close = float(df["close"].iloc[-1])
+        ema_dist = ((curr_close - curr_ema) / curr_ema) * 100.0
 
-        # Wilder's Smoothing
-        def rma(series: pd.Series, window: int) -> pd.Series:
-            return series.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+        # Classification rules
+        if curr_adx > self.adx_strong and curr_close > curr_ema:
+            regime = MarketRegime.STRONG_TREND_UP
+        elif self.adx_weak <= curr_adx <= self.adx_strong and curr_close > curr_ema:
+            regime = MarketRegime.WEAK_TREND_UP
+        elif self.adx_weak <= curr_adx <= self.adx_strong and curr_close < curr_ema:
+            regime = MarketRegime.WEAK_TREND_DOWN
+        elif curr_adx > self.adx_strong and curr_close < curr_ema:
+            regime = MarketRegime.STRONG_TREND_DOWN
+        else:
+            regime = MarketRegime.SIDEWAYS
 
-        atr = rma(tr, period)
-        plus_di = 100 * (rma(plus_dm, period) / atr)
-        minus_di = 100 * (rma(minus_dm, period) / atr)
+        # 2. Volatility Override
+        if current_atr_percentile >= self.high_vol_percentile:
+            regime = MarketRegime.HIGH_VOLATILITY
 
-        dx = 100 * ((plus_di - minus_di).abs() / (plus_di + minus_di).abs())  # type: ignore[attr-defined]
-        adx = rma(dx, period)
+        # 3. Track Stability
+        self.last_regimes.append(regime)
+        if len(self.last_regimes) > self.STABILITY_PERIOD:
+            self.last_regimes.pop(0)
 
-        # fillna untuk menghindari NA
-        return adx.fillna(0.0), plus_di.fillna(0.0), minus_di.fillna(0.0)  # type: ignore[attr-defined]
+        is_stable_trend = False
+        if len(self.last_regimes) == self.STABILITY_PERIOD:
+            if all(r == regime for r in self.last_regimes):
+                is_stable_trend = True
+
+        # 4. Confidence
+        conf = self._calculate_confidence(curr_adx, ema_dist, adx_trend_str, is_stable_trend)
+
+        return RegimeResult(
+            regime=regime,
+            confidence=conf,
+            adx=curr_adx,
+            adx_trend=adx_trend_str,
+            ema50_distance=ema_dist,
+            is_stable=is_stable_trend,
+            lookback_candles=len(df),
+        )
+
+    def is_regime_change(self, prev: MarketRegime, curr: MarketRegime) -> bool:
+        if prev == curr:
+            return False
+
+        up_trends = [MarketRegime.STRONG_TREND_UP, MarketRegime.WEAK_TREND_UP]
+        down_trends = [MarketRegime.STRONG_TREND_DOWN, MarketRegime.WEAK_TREND_DOWN]
+
+        # Pindah derajat namun satu arah tidak dihitung pergeseran drastis
+        if prev in up_trends and curr in up_trends:
+            return False
+        if prev in down_trends and curr in down_trends:
+            return False
+
+        return True

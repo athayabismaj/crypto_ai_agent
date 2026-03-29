@@ -1,178 +1,187 @@
 """
-OrderbookManager — Depth management dan analisis.
-
-Menyimpan orderbook snapshot di memory dan menyediakan
-query analitik: imbalance, fill price estimation, depth volume.
+Layer Data: Buku Ordo (Orderbook)
+Mengkonstruksi Kedalaman Harga (Liquidity Depth) 
+dari snapshot HTTP + Delta Stream Binance.
 """
 
-import logging
-from datetime import UTC, datetime
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import ClassVar
 
-from runtime.agent.models import Orderbook, OrderbookLevel  # type: ignore
-
-logger = logging.getLogger(__name__)
+from runtime.agent.data_layer.validator import utcnow
 
 
-class OrderbookManager:
-    """
-    In-memory orderbook store per symbol.
+@dataclass
+class OrderbookLevel:
+    price: float
+    quantity: float
 
-    Data di-update via `update()` (dari WebSocket diff)
-    atau `set_snapshot()` (dari REST).
-    """
 
-    def __init__(self) -> None:
-        # {symbol: Orderbook}
-        self._books: dict[str, Orderbook] = {}
+@dataclass
+class Orderbook:
+    symbol: str
+    bids: list[OrderbookLevel] = field(default_factory=list)  # DESC (Tertinggi dulu)
+    asks: list[OrderbookLevel] = field(default_factory=list)  # ASC (Terendah dulu)
+    timestamp: datetime = field(default_factory=utcnow)
+    last_update_id: int = 0
 
-    # ── Write methods ──────────────────────────────────────────
+    @property
+    def best_bid(self) -> float:
+        return self.bids[0].price if self.bids else 0.0
 
-    def set_snapshot(self, ob: Orderbook) -> None:
-        """Set full snapshot (biasanya dari REST initial load)."""
-        self._books[ob.symbol] = ob
-        logger.debug(
-            "Orderbook snapshot set: %s (%d bids, %d asks)",
-            ob.symbol,
-            len(ob.bids),
-            len(ob.asks),
-        )
+    @property
+    def best_ask(self) -> float:
+        return self.asks[0].price if self.asks else 0.0
 
-    def update(
-        self,
-        symbol: str,
-        bid_updates: list[tuple[float, float]],
-        ask_updates: list[tuple[float, float]],
-        last_update_id: int = 0,
-    ) -> None:
-        """
-        Apply incremental update (dari WebSocket diff depth).
+    @property
+    def mid_price(self) -> float:
+        if self.best_bid > 0 and self.best_ask > 0:
+            return (self.best_bid + self.best_ask) / 2
+        return 0.0
 
-        Format update: list[(price, quantity)].
-        quantity=0 → hapus level.
-        quantity>0 → update/tambah level.
-        """
-        existing = self._books.get(symbol)
-        if existing is None:
-            logger.warning("No snapshot for %s, skipping update", symbol)
-            return
+    @property
+    def spread_pct(self) -> float:
+        mid = self.mid_price
+        if mid == 0:
+            return 0.0
+        return ((self.best_ask - self.best_bid) / mid) * 100
 
-        # Cek sequence
-        if (
-            last_update_id > 0
-            and existing.last_update_id > 0
-            and last_update_id <= existing.last_update_id
-        ):
-            return  # stale update, skip
-
-        # Apply bid updates
-        bids = {lvl.price: lvl.quantity for lvl in existing.bids}
-        for price, qty in bid_updates:
-            if qty == 0:
-                bids.pop(price, None)
+    def get_bid_depth(self, pct: float = 0.01) -> float:
+        limit = self.best_bid * (1 - pct)
+        total_qty = 0.0
+        for b in self.bids:
+            if b.price >= limit:
+                total_qty += b.quantity
             else:
-                bids[price] = qty
+                break
+        return total_qty
 
-        # Apply ask updates
-        asks = {lvl.price: lvl.quantity for lvl in existing.asks}
-        for price, qty in ask_updates:
-            if qty == 0:
-                asks.pop(price, None)
+    def get_ask_depth(self, pct: float = 0.01) -> float:
+        limit = self.best_ask * (1 + pct)
+        total_qty = 0.0
+        for a in self.asks:
+            if a.price <= limit:
+                total_qty += a.quantity
             else:
-                asks[price] = qty
+                break
+        return total_qty
 
-        # Rebuild sorted lists
-        sorted_bids = [
-            OrderbookLevel(price=p, quantity=q) for p, q in sorted(bids.items(), reverse=True)
-        ]
-        sorted_asks = [OrderbookLevel(price=p, quantity=q) for p, q in sorted(asks.items())]
-
-        self._books[symbol] = Orderbook(
-            symbol=symbol,
-            bids=sorted_bids,
-            asks=sorted_asks,
-            timestamp=datetime.now(UTC),
-            last_update_id=last_update_id or existing.last_update_id,
-        )
-
-    # ── Read methods ───────────────────────────────────────────
-
-    def get_snapshot(self, symbol: str) -> Orderbook | None:
-        """Return current orderbook atau None jika belum ada."""
-        return self._books.get(symbol)
-
-    def is_fresh(self, symbol: str, max_age_s: float = 5.0) -> bool:
-        """Cek apakah orderbook masih fresh."""
-        ob = self._books.get(symbol)
-        if ob is None:
-            return False
-        age = (datetime.now(UTC) - ob.timestamp).total_seconds()
-        return age <= max_age_s
-
-    def get_imbalance(self, symbol: str, depth: int = 5) -> float:
-        """
-        Bid vs ask volume imbalance di N level teratas.
-
-        Return -1.0 (all ask) to +1.0 (all bid).
-        Return 0.0 jika tidak ada data.
-        """
-        ob = self._books.get(symbol)
-        if ob is None:
-            return 0.0
-
-        bid_vol = sum(lvl.quantity for lvl in ob.bids[:depth])
-        ask_vol = sum(lvl.quantity for lvl in ob.asks[:depth])
-
-        total = bid_vol + ask_vol
-        if total == 0:
-            return 0.0
-        return (bid_vol - ask_vol) / total
-
-    def estimate_fill_price(self, symbol: str, qty: float, side: str) -> float:
-        """
-        Walk through orderbook untuk estimasi average fill price.
-
-        side='BUY'  → walk asks (kita beli dari ask)
-        side='SELL' → walk bids (kita jual ke bid)
-        Return 0.0 jika data tidak cukup.
-        """
-        ob = self._books.get(symbol)
-        if ob is None:
-            return 0.0
-
-        levels = ob.asks if side == "BUY" else ob.bids
+    def estimate_fill_price(self, qty: float, side: str) -> float:
         remaining = qty
         total_cost = 0.0
 
+        levels = self.asks if side.upper() == "BUY" else self.bids
+        if not levels:
+            return 0.0
+
         for lvl in levels:
-            fill = min(remaining, lvl.quantity)
-            total_cost += fill * lvl.price
-            remaining -= fill
+            take = min(remaining, lvl.quantity)
+            total_cost += take * lvl.price
+            remaining -= take
+
             if remaining <= 0:
                 break
 
+        # Kalau slippage melewati batas book, kita return harga rata-rata yang bisa dieksekusi
         filled = qty - remaining
-        if filled <= 0:
+        if filled == 0:
             return 0.0
+
         return total_cost / filled
 
-    def get_bid_depth(self, symbol: str, pct: float = 0.01) -> float:
-        """Total volume bid dalam range pct% dari best bid."""
-        ob = self._books.get(symbol)
-        if ob is None or not ob.bids:
+    def get_imbalance(self, depth: int = 5) -> float:
+        b_vol = sum(b.quantity for b in self.bids[:depth])
+        a_vol = sum(a.quantity for a in self.asks[:depth])
+
+        if b_vol + a_vol == 0:
             return 0.0
 
-        threshold = ob.best_bid * (1 - pct)  # type: ignore[union-attr]
-        return sum(lvl.quantity for lvl in ob.bids if lvl.price >= threshold)  # type: ignore[union-attr]
+        # +1.0 = full bid (bullish), -1.0 = full ask (bearish)
+        return (b_vol - a_vol) / (b_vol + a_vol)
 
-    def get_ask_depth(self, symbol: str, pct: float = 0.01) -> float:
-        """Total volume ask dalam range pct% dari best ask."""
-        ob = self._books.get(symbol)
-        if ob is None or not ob.asks:
-            return 0.0
 
-        threshold = ob.best_ask * (1 + pct)  # type: ignore[union-attr]
-        return sum(lvl.quantity for lvl in ob.asks if lvl.price <= threshold)  # type: ignore[union-attr]
+class OrderbookStore:
+    """Manajer Sinkronisasi Delta Stream Orderbook dari Binance."""
 
-    def get_symbols(self) -> list[str]:
-        """Return list semua symbol yang ada di store."""
-        return list(self._books.keys())
+    MAX_FRESH_AGE_S: ClassVar[float] = 5.0
+
+    def __init__(self) -> None:
+        self._books: dict[str, Orderbook] = {}
+
+    def get_latest(self, symbol: str) -> Orderbook | None:
+        return self._books.get(symbol)
+
+    def is_fresh(self, symbol: str, max_age_s: float | None = None) -> bool:
+        limit = max_age_s or self.MAX_FRESH_AGE_S
+        ob = self.get_latest(symbol)
+        if not ob:
+            return False
+
+        age = (utcnow() - ob.timestamp).total_seconds()
+        return age <= limit
+
+    def apply_snapshot(
+        self,
+        symbol: str,
+        bids: list[tuple[float, float]],
+        asks: list[tuple[float, float]],
+        up_id: int,
+    ) -> None:
+        # Merakit list
+        b = [OrderbookLevel(price=p, quantity=q) for p, q in bids if q > 0]
+        a = [OrderbookLevel(price=p, quantity=q) for p, q in asks if q > 0]
+
+        # Sort pasti (bids DESC, asks ASC)
+        b.sort(key=lambda x: x.price, reverse=True)
+        a.sort(key=lambda x: x.price)
+
+        self._books[symbol] = Orderbook(
+            symbol=symbol, bids=b, asks=a, timestamp=utcnow(), last_update_id=up_id
+        )
+
+    def apply_delta(
+        self,
+        symbol: str,
+        bids: list[tuple[float, float]],
+        asks: list[tuple[float, float]],
+        up_id: int,
+    ) -> None:
+        """Delta Incremental Updates (wss://stream.../depth@100ms)"""
+        if symbol not in self._books:
+            return
+
+        ob = self._books[symbol]
+
+        # Jika Event Lama (out-of-order)
+        if up_id <= ob.last_update_id:
+            return
+
+        # Update Bids
+        b_dict = {lvl.price: lvl for lvl in ob.bids}
+        for p, q in bids:
+            if q == 0 and p in b_dict:
+                del b_dict[p]
+            elif q > 0:
+                if p in b_dict:
+                    b_dict[p].quantity = q
+                else:
+                    b_dict[p] = OrderbookLevel(p, q)
+
+        # Update Asks
+        a_dict = {lvl.price: lvl for lvl in ob.asks}
+        for p, q in asks:
+            if q == 0 and p in a_dict:
+                del a_dict[p]
+            elif q > 0:
+                if p in a_dict:
+                    a_dict[p].quantity = q
+                else:
+                    a_dict[p] = OrderbookLevel(p, q)
+
+        # Re-construct lists + re-sort
+        ob.bids = sorted(list(b_dict.values()), key=lambda x: x.price, reverse=True)
+        ob.asks = sorted(list(a_dict.values()), key=lambda x: x.price)
+
+        # Update meta
+        ob.timestamp = utcnow()
+        ob.last_update_id = up_id

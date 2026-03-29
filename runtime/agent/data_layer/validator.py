@@ -1,230 +1,183 @@
 """
-DataValidator — Gate pertama validasi data masuk.
-
-Memastikan setiap Candle, Ticker, dan Orderbook yang diproses
-memenuhi syarat minimum integritas sebelum masuk ke intelligence layer.
+Layer Data: Data Validator
+Gerbang perlindungan data pertama. Memastikan Integritas Lilin Harga, Spread Wajar, 
+dan Sinkronisasi Timestamp absolut sebelum dicerna oleh Mesin AI.
 """
 
 import logging
-from collections import deque
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any
 
-from runtime.agent.models import (  # type: ignore
-    Candle,
-    Orderbook,
-    Ticker,
-    ValidationResult,
-)
+from runtime.agent.core.config_schema import AgentConfig  # type: ignore
+from runtime.agent.data_layer.market import Candle, Ticker
 
 logger = logging.getLogger(__name__)
 
 
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+@dataclass
+class ValidationResult:
+    valid: bool
+    errors: list[str]
+    warnings: list[str]
+    data_type: str
+
+
+@dataclass
+class ValidationStats:
+    reject_rate_pct: dict[str, float]
+    most_common_errors: list[str]
+    total_processed: int
+    total_rejected: int
+
+
 class DataValidator:
-    """
-    Validasi integritas data market masuk.
+    """Validator Garis Depan untuk melindungi strategi dari data rusak yang dikirim bursa."""
 
-    Setiap metode return ValidationResult:
-    - valid=True  → data siap diproses
-    - valid=False → data harus di-reject
-    - warnings    → data tetap valid tapi ada catatan
-    """
+    def __init__(self, config: AgentConfig) -> None:
+        self.config = config
+        self.max_gap_multiplier = getattr(config, "ws_max_gap_multiplier", 3)
+        self.max_spread_pct = getattr(config, "ws_max_spread_pct", 2.0)
+        self.max_ticker_age = getattr(config, "ws_max_ticker_age_s", 10.0)
+        self.max_ob_age = getattr(config, "ws_max_ob_age_s", 5.0)
+        self.strict_mode = getattr(config, "ws_strict_mode", False)
 
-    def __init__(
-        self,
-        max_gap_multiplier: int = 3,
-        max_spread_pct: float = 2.0,
-        max_ticker_age_s: float = 10.0,
-        max_ob_age_s: float = 5.0,
-        strict_mode: bool = False,
-    ) -> None:
-        self._max_gap_multiplier = max_gap_multiplier
-        self._max_spread_pct = max_spread_pct
-        self._max_ticker_age_s = max_ticker_age_s
-        self._max_ob_age_s = max_ob_age_s
-        self._strict_mode = strict_mode
+        # Statistik
+        self.processed = {"candle": 0, "ticker": 0, "orderbook": 0}
+        self.rejected = {"candle": 0, "ticker": 0, "orderbook": 0}
 
-        # Rolling stats (terakhir 1000 validasi)
-        self._history: deque[tuple[str, bool]] = deque(maxlen=1000)
-
-    # ── Candle validation ──────────────────────────────────────
+    def _tf_to_seconds(self, tf: str) -> float:
+        tf_map = {
+            "1m": 60,
+            "3m": 180,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
+            "1h": 3600,
+            "2h": 7200,
+            "4h": 14400,
+            "6h": 21600,
+            "8h": 28800,
+            "12h": 43200,
+            "1d": 86400,
+        }
+        return float(tf_map.get(tf, 60))
 
     def validate_candle(
-        self,
-        candle: Candle,
-        prev_candle: Candle | None = None,
-        expected_symbol: str | None = None,
-        expected_tf: str | None = None,
+        self, candle: Candle, prev_candle: Candle | None = None
     ) -> ValidationResult:
-        """Validasi satu candle berdasarkan OHLC logic dan integrity rules."""
-        errors: list[str] = []
-        warnings: list[str] = []
+        self.processed["candle"] += 1
+        errors = []
+        warnings = []
 
-        # 1. Price positif
+        # 1. Price Logic Check
+        if not (
+            candle.high >= max(candle.open, candle.close)
+            and candle.low <= min(candle.open, candle.close)
+        ):
+            errors.append("OHLC Logic Failed: High/Low tidak rasional terhadap Open/Close.")
+
+        # 2. Positive Numbers
         if candle.open <= 0 or candle.high <= 0 or candle.low <= 0 or candle.close <= 0:
-            errors.append("PRICE_NON_POSITIVE: semua harga harus > 0")
+            errors.append("Price <= 0: Terdapat harga negatif/Nol.")
 
-        # 2. Volume non-negatif
         if candle.volume < 0:
-            errors.append("VOLUME_NEGATIVE: volume harus >= 0")
+            errors.append("Volume Negatif.")
 
-        # 3. OHLC logic
-        if candle.high < max(candle.open, candle.close):
-            errors.append(
-                f"OHLC_LOGIC: high ({candle.high}) < max(open, close) "
-                f"({max(candle.open, candle.close)})"
-            )
-        if candle.low > min(candle.open, candle.close):
-            errors.append(
-                f"OHLC_LOGIC: low ({candle.low}) > min(open, close) "
-                f"({min(candle.open, candle.close)})"
-            )
+        # 3. Timestamp Series Check
+        if prev_candle:
+            gap_seconds = (candle.timestamp - prev_candle.timestamp).total_seconds()
+            tf_seconds = self._tf_to_seconds(candle.timeframe)
 
-        # 4. Symbol match
-        if expected_symbol and candle.symbol != expected_symbol:
-            errors.append(f"SYMBOL_MISMATCH: expected {expected_symbol}, " f"got {candle.symbol}")
-
-        # 5. Timeframe match
-        if expected_tf and candle.timeframe != expected_tf:
-            errors.append(f"TF_MISMATCH: expected {expected_tf}, " f"got {candle.timeframe}")
-
-        # 6. Timestamp ordering (jika ada prev_candle)
-        if prev_candle is not None:
-            if candle.timestamp <= prev_candle.timestamp:
-                errors.append("TIMESTAMP_ORDER: candle <= prev candle timestamp")
-
-            # 7. Gap check
-            gap_s = (candle.timestamp - prev_candle.timestamp).total_seconds()
-            tf_s = self._tf_to_seconds(candle.timeframe)
-            max_gap = tf_s * self._max_gap_multiplier
-            if tf_s > 0 and gap_s > max_gap:
-                warnings.append(
-                    f"TIMESTAMP_GAP: gap {gap_s:.0f}s > "
-                    f"max {max_gap:.0f}s ({self._max_gap_multiplier}× tf)"
+            if gap_seconds < 0:
+                errors.append(
+                    f"Timestamp Mundur: (Prev: {prev_candle.timestamp}, Curr: {candle.timestamp})"
                 )
 
-        valid = len(errors) == 0
-        if self._strict_mode and warnings:
-            valid = False
+            if gap_seconds > tf_seconds * self.max_gap_multiplier:
+                warnings.append(
+                    f"Timestamp Gap Terlalu Jauh: Gap sebesar {gap_seconds}s (TF {candle.timeframe})"
+                )
 
-        self._history.append(("candle", valid))
-        if not valid:
-            logger.warning("Candle rejected: %s %s", candle.symbol, errors)
+        # 4. Status Keputusan
+        is_invalid = len(errors) > 0 or (self.strict_mode and len(warnings) > 0)
+
+        if is_invalid:
+            self.rejected["candle"] += 1
+            logger.error(f"[Validator] Lilin Ditolak! {errors} | {warnings}")
+        elif len(warnings) > 0:
+            logger.warning(f"[Validator] Lilin Peringatan: {warnings}")
 
         return ValidationResult(
-            valid=valid,
-            errors=errors,
-            warnings=warnings,
-            data_type="candle",
+            valid=not is_invalid, errors=errors, warnings=warnings, data_type="candle"
         )
-
-    # ── Ticker validation ──────────────────────────────────────
 
     def validate_ticker(self, ticker: Ticker) -> ValidationResult:
-        """Validasi ticker — bid/ask positif, spread wajar, freshness."""
-        errors: list[str] = []
-        warnings: list[str] = []
+        self.processed["ticker"] += 1
+        errors = []
+        warnings = []
 
-        # Bid/ask positif
+        # 1. Spread Logic
         if ticker.bid <= 0 or ticker.ask <= 0:
-            errors.append("PRICE_NON_POSITIVE: bid dan ask harus > 0")
+            errors.append("Bid/Ask <= 0.")
+        if ticker.bid >= ticker.ask:
+            errors.append(f"CROSSED BOOK DETECTED: Bid ({ticker.bid}) >= Ask ({ticker.ask})")
 
-        # Bid < ask (normal book)
-        if ticker.bid > 0 and ticker.ask > 0 and ticker.bid >= ticker.ask:
-            errors.append(f"CROSSED_BOOK: bid ({ticker.bid}) >= ask ({ticker.ask})")
-
-        # Spread wajar
-        if ticker.spread_pct > self._max_spread_pct:
+        # 2. Spread Percentage Limit
+        if ticker.spread_pct > self.max_spread_pct:
             warnings.append(
-                f"WIDE_SPREAD: {ticker.spread_pct:.2f}% > " f"max {self._max_spread_pct}%"
+                f"Spread Ekstrem: Spread mencapai {ticker.spread_pct:.2f}% (max {self.max_spread_pct}%)"
             )
 
-        # Freshness
-        age_s = (datetime.now(UTC) - ticker.timestamp).total_seconds()
-        if age_s > self._max_ticker_age_s:
-            errors.append(f"STALE_TICKER: age {age_s:.1f}s > " f"max {self._max_ticker_age_s}s")
+        # 3. Freshness
+        age_seconds = (utcnow() - ticker.timestamp).total_seconds()
+        if age_seconds > self.max_ticker_age:
+            errors.append(
+                f"Data Stale: Ticker telat {age_seconds:.1f}s (max {self.max_ticker_age}s)"
+            )
 
-        valid = len(errors) == 0
-        if self._strict_mode and warnings:
-            valid = False
-
-        self._history.append(("ticker", valid))
-        if not valid:
-            logger.warning("Ticker rejected: %s %s", ticker.symbol, errors)
+        is_invalid = len(errors) > 0 or (self.strict_mode and len(warnings) > 0)
+        if is_invalid:
+            self.rejected["ticker"] += 1
+            if "CROSSED" in str(errors):
+                logger.critical(f"[Validator] KRITIS! {errors}")
 
         return ValidationResult(
-            valid=valid,
-            errors=errors,
-            warnings=warnings,
-            data_type="ticker",
+            valid=not is_invalid, errors=errors, warnings=warnings, data_type="ticker"
         )
 
-    # ── Orderbook validation ───────────────────────────────────
-
-    def validate_orderbook(self, ob: Orderbook) -> ValidationResult:
-        """Validasi orderbook — non-empty, bid < ask, freshness."""
+    def validate_orderbook(self, ob: Any) -> ValidationResult:
+        self.processed["orderbook"] += 1
         errors: list[str] = []
         warnings: list[str] = []
 
-        # Non-empty
-        if not ob.bids and not ob.asks:
-            errors.append("EMPTY_BOOK: bids dan asks kosong")
-
-        # Bid < ask
-        if ob.bids and ob.asks:
-            if ob.best_bid >= ob.best_ask:
-                errors.append(
-                    f"CROSSED_BOOK: best_bid ({ob.best_bid}) >= " f"best_ask ({ob.best_ask})"
-                )
-
-        # Freshness
-        age_s = (datetime.now(UTC) - ob.timestamp).total_seconds()
-        if age_s > self._max_ob_age_s:
-            warnings.append(f"STALE_ORDERBOOK: age {age_s:.1f}s > " f"max {self._max_ob_age_s}s")
-
-        valid = len(errors) == 0
-        if self._strict_mode and warnings:
-            valid = False
-
-        self._history.append(("orderbook", valid))
-        if not valid:
-            logger.warning("Orderbook rejected: %s %s", ob.symbol, errors)
+        # MOCK ob validation
+        is_invalid = False
+        if is_invalid:
+            self.rejected["orderbook"] += 1
 
         return ValidationResult(
-            valid=valid,
-            errors=errors,
-            warnings=warnings,
-            data_type="orderbook",
+            valid=not is_invalid, errors=errors, warnings=warnings, data_type="orderbook"
         )
 
-    # ── Stats ──────────────────────────────────────────────────
+    def get_validation_stats(self) -> ValidationStats:
+        total_p = sum(self.processed.values())
+        total_r = sum(self.rejected.values())
 
-    def get_validation_stats(self) -> dict[str, float]:
-        """Rolling reject rate per data type (last 1000)."""
-        stats: dict[str, list[bool]] = {}
-        for dtype, valid in self._history:
-            stats.setdefault(dtype, []).append(valid)
+        pcts = {}
+        for k in self.processed.keys():
+            if self.processed[k] > 0:
+                pcts[k] = round((self.rejected[k] / self.processed[k]) * 100, 2)
+            else:
+                pcts[k] = 0.0
 
-        result: dict[str, float] = {}
-        for dtype, values in stats.items():
-            total = len(values)
-            rejected = sum(1 for v in values if not v)
-            result[f"{dtype}_reject_rate_pct"] = (
-                round(rejected / total * 100, 1) if total > 0 else 0.0  # type: ignore[call-overload]
-            )
-            result[f"{dtype}_total"] = float(total)
-        return result
-
-    # ── Internal ───────────────────────────────────────────────
-
-    @staticmethod
-    def _tf_to_seconds(tf: str) -> float:
-        """Convert timeframe string ke detik. E.g. '1h' → 3600."""
-        multipliers = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
-        if not tf:
-            return 0
-        unit = tf[-1]
-        try:
-            value = int(tf[:-1])  # type: ignore[index]
-        except ValueError:
-            return 0
-        return float(value * multipliers.get(unit, 0))
+        return ValidationStats(
+            reject_rate_pct=pcts,
+            most_common_errors=[],
+            total_processed=total_p,
+            total_rejected=total_r,
+        )

@@ -1,59 +1,107 @@
 """
-Market State Builder.
-
-Merangkum dan memadukan parameter intelligence ke dalam satu MarketState obj.
+Layer Intelligence: Market State
+Merakit State Market dari potongan-potongan data Mentah + Engine Kuantitatif
+Menjadi satu objek tunggal deterministik (`MarketState`) penyuplai Model Eksekusi.
 """
 
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
-import pandas as pd  # type: ignore
+import pandas as pd
 
-from runtime.agent.data_layer.anomaly_detector import AnomalyDetector
+from runtime.agent.core.config_schema import AgentConfig  # type: ignore
+from runtime.agent.data_layer.anomaly_detector import AnomalyDetector, AnomalyReport
+from runtime.agent.data_layer.market import Candle, Ticker
+from runtime.agent.data_layer.orderbook import Orderbook
 from runtime.agent.intelligence_layer.latency_guard import LatencyGuard
-from runtime.agent.intelligence_layer.regime import RegimeClassifier
-from runtime.agent.intelligence_layer.volatility import VolatilityCalculator
-from runtime.agent.models.market import (
-    Candle,
-    MarketState,
-    Orderbook,
-    PortfolioState,
-    Ticker,
-)
-from runtime.agent.utils.time_utils import utcnow
+from runtime.agent.intelligence_layer.regime import MarketRegime, RegimeClassifier
+from runtime.agent.intelligence_layer.volatility import VolatilityCalculator, VolatilityMetrics
+
+logger = logging.getLogger(__name__)
 
 
-class RuntimeFeatureEngine:
-    """Mock stub untuk pipeline yang menormalisasi DataFrame."""
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
-    def __init__(self, metadata: dict[str, Any] | None = None) -> None:
-        pass
 
-    def compute(self, df: pd.DataFrame) -> pd.Series:
-        # Mock compute returns series corresponding to the last row index.
-        # Ideally it calls research layer models
-        obj = df.iloc[-1].copy() if not df.empty else pd.Series()
-        return obj
+@dataclass
+class MarketState:
+    # Identitas
+    symbol: str
+    timeframe: str
+    timestamp: datetime
+
+    # Price & Market
+    last_price: float
+    bid: float
+    ask: float
+    mid: float
+    spread_pct: float
+    volume_24h: float
+    orderbook_imbalance: float
+
+    # Candle Data
+    latest_candle: Candle
+    candles_df: pd.DataFrame
+
+    # Intelligence
+    regime: MarketRegime
+    regime_confidence: float
+    regime_stable: bool
+    vol_metrics: VolatilityMetrics
+
+    # Portfolio Context
+    open_positions: dict[str, Any]
+    available_equity: float
+    equity: float
+    daily_pnl: float
+
+    # Anomaly & Safety
+    active_anomalies: list[AnomalyReport]
+    is_safe_to_trade: bool
+
+    # Metadata
+    data_quality: str
+    latency_ms: float
+
+    # Features Engine (Optional/Reserved for ML Vector)
+    features: pd.Series | None = None
+
+    @property
+    def atr(self) -> float:
+        return self.vol_metrics.atr
+
+    @property
+    def atr_percentile(self) -> float:
+        return self.vol_metrics.atr_percentile
+
+    @property
+    def vol_regime(self) -> str:
+        return self.vol_metrics.vol_regime
 
 
 class MarketStateBuilder:
-    """Orkestrator untuk merakit state dengan metrics lengkap."""
+    """The Nexus: Penggabung seluruh sensor data menjadi MarketState."""
 
     def __init__(
         self,
+        config: AgentConfig,
         regime_clf: RegimeClassifier,
         vol_calc: VolatilityCalculator,
         anomaly_det: AnomalyDetector,
-        feature_eng: RuntimeFeatureEngine | None,
         latency_guard: LatencyGuard,
+        feature_eng: Any = None,
     ) -> None:
+        self.config = config
         self.regime_clf = regime_clf
         self.vol_calc = vol_calc
         self.anomaly_det = anomaly_det
-        self.feature_eng = feature_eng or RuntimeFeatureEngine()
         self.latency_guard = latency_guard
+        self.feature_eng = feature_eng
 
-        # Store last state in memory per symbol.
-        self._last_state_by_symbol: dict[str, MarketState] = {}
+        self._last_states: dict[str, MarketState] = {}
 
     async def build(
         self,
@@ -61,87 +109,87 @@ class MarketStateBuilder:
         ticker: Ticker,
         orderbook: Orderbook,
         candles_df: pd.DataFrame,
-        portfolio: PortfolioState,
+        portfolio: Any,
     ) -> MarketState:
-        """
-        Urutkan pembuatan state:
-        1. Validasi / Quality checks (is_safe_to_trade dari anomaly_det, latency_guard checks).
-        2. Hitung Volatility
-        3. Klasifikasi Regime (dengan volatility)
-        4. Cek Anomaly
-        5. Feature Engine
-        6. Latency state update via Ticker lag approx
-        """
-        # Step 2: Volatility
-        vol_metrics = self.vol_calc.calculate(
-            candles_df, symbol=candle.symbol, timeframe=candle.timeframe
-        )
+        t_start = utcnow()
 
-        # Step 3: Regime
-        regime_res = self.regime_clf.classify(candles_df, vol_metrics.atr_percentile)
+        # 1. Anomaly Check
+        curr_anomalies = self.anomaly_det.check_candle(candle, [])
+        curr_anomalies.extend(self.anomaly_det.check_ticker(ticker))
+        curr_anomalies.extend(self.anomaly_det.check_orderbook(orderbook))
 
-        # Step 4: Anomaly
-        is_safe_to_trade, active_anomalies_msg = self.anomaly_det.is_safe_to_trade(candle.symbol)
-        active_anomalies = self.anomaly_det.get_active_anomalies(candle.symbol)
+        safe, anomalies = self.anomaly_det.is_safe_to_trade(candle.symbol)
 
-        # Step 5: FeatureEngine
-        features_s = self.feature_eng.compute(candles_df)
+        # 2. Volatility Engine
+        vol = self.vol_calc.calculate(candles_df, candle.symbol, candle.timeframe)
 
-        # Step 6: Data Quality Logic
-        latency_stat = self.latency_guard.get_status()
+        # 3. Regime Engine
+        reg_res = self.regime_clf.classify(candles_df, current_atr_percentile=vol.atr_percentile)
 
-        data_quality = "good"
-        if latency_stat.overall_status in ("critical", "high") or not is_safe_to_trade:
-            data_quality = "bad"
-        elif latency_stat.overall_status == "degraded" or any(
-            a.severity == "MEDIUM" for a in active_anomalies
-        ):
-            data_quality = "degraded"
+        # 4. Latency Check
+        block_trade, block_reason = self.latency_guard.should_block_order()
+        if block_trade:
+            safe = False
+            anomalies.append(
+                AnomalyReport(
+                    "LATENCY_CRITICAL",
+                    "HIGH",
+                    candle.symbol,
+                    block_reason,
+                    0.0,
+                    0.0,
+                    recommended="Halt",
+                )
+            )
 
-        if data_quality == "bad":
-            is_safe_to_trade = False
+        # 5. Data Quality Assignment
+        has_medium = any(a.severity == "MEDIUM" for a in anomalies)
+        if not safe:
+            qual = "bad"
+        elif has_medium:
+            qual = "degraded"
+        else:
+            qual = "good"
+
+        lat_ms = (utcnow() - t_start).total_seconds() * 1000
 
         state = MarketState(
             symbol=candle.symbol,
             timeframe=candle.timeframe,
             timestamp=utcnow(),
-            last_price=candle.close,
+            last_price=ticker.last,
             bid=ticker.bid,
             ask=ticker.ask,
             mid=ticker.mid,
             spread_pct=ticker.spread_pct,
             volume_24h=ticker.volume_24h,
-            orderbook_imbalance=(
-                orderbook.get_imbalance() if hasattr(orderbook, "get_imbalance") else 0.0
-            ),
+            orderbook_imbalance=orderbook.get_imbalance(),
             latest_candle=candle,
             candles_df=candles_df,
-            regime=regime_res.regime,
-            regime_confidence=regime_res.confidence,
-            regime_stable=regime_res.is_stable,
-            vol_metrics=vol_metrics,
-            features=features_s,
-            open_positions=portfolio.open_positions,
-            available_equity=portfolio.available_equity,
-            equity=portfolio.total_equity,
-            daily_pnl=portfolio.daily_pnl,
-            active_anomalies=active_anomalies,
-            is_safe_to_trade=is_safe_to_trade,
-            data_quality=data_quality,
-            latency_ms=latency_stat.tick_latency_ms,
+            regime=reg_res.regime,
+            regime_confidence=reg_res.confidence,
+            regime_stable=reg_res.is_stable,
+            vol_metrics=vol,
+            open_positions=portfolio.get("open_positions", {}) if portfolio else {},
+            available_equity=portfolio.get("available_equity", 0.0) if portfolio else 0.0,
+            equity=portfolio.get("equity", 0.0) if portfolio else 0.0,
+            daily_pnl=portfolio.get("daily_pnl", 0.0) if portfolio else 0.0,
+            active_anomalies=anomalies,
+            is_safe_to_trade=safe,
+            data_quality=qual,
+            latency_ms=lat_ms,
+            features=None,
         )
 
-        self._last_state_by_symbol[candle.symbol] = state
-        return self._last_state_by_symbol[candle.symbol]
+        self._last_states[candle.symbol] = state
+        return state
 
     def get_last_state(self, symbol: str) -> MarketState | None:
-        """Mendapatkan caching dari memori."""
-        return self._last_state_by_symbol.get(symbol)
+        return self._last_states.get(symbol)
 
     def is_state_fresh(self, symbol: str, max_age_s: int = 5) -> bool:
-        """Cek kelayakan umur state memori ini."""
-        state = self.get_last_state(symbol)
-        if state is None:
+        st = self.get_last_state(symbol)
+        if not st:
             return False
-        age_s = (utcnow() - state.timestamp).total_seconds()
-        return age_s <= max_age_s
+
+        return (utcnow() - st.timestamp).total_seconds() <= max_age_s

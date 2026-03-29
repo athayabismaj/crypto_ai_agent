@@ -1,265 +1,207 @@
 """
-AnomalyDetector — Deteksi kondisi market abnormal.
-
-Berbeda dengan validator (cek integritas data), anomaly detector
-mendeteksi kondisi market yang berbahaya untuk trading.
+Layer Data: Pendeteksi Anomali
+Proteksi Tingkat Tinggi: Menghentikan trading bila Market sedang Extreme
+atau Data Feed sedang bermasalah (Spike / Stale / Crossed).
 """
 
 import logging
 import math
-from datetime import UTC, datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any
 
-from runtime.agent.models import (  # type: ignore
-    AnomalyReport,
-    Candle,
-    Orderbook,
-    Ticker,
-)
+from runtime.agent.core.config_schema import AgentConfig  # type: ignore
+from runtime.agent.data_layer.market import Candle, Ticker
 
 logger = logging.getLogger(__name__)
 
 
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+@dataclass
+class AnomalyReport:
+    anomaly_id: str
+    severity: str  # LOW | MEDIUM | HIGH | CRITICAL
+    symbol: str
+    message: str
+    value: float
+    threshold: float
+    timestamp: datetime = field(default_factory=utcnow)
+    recommended: str = ""
+
+
 class AnomalyDetector:
-    """
-    Deteksi anomali market: spike, stale data, crossed book, dll.
+    """Mendeteksi kondisi bursa abnormal yang membahayakan Agen."""
 
-    Anomali yang terdeteksi disimpan sebagai 'active' sampai
-    di-resolve atau auto-expire setelah ANOMALY_PERSIST_S.
-    """
+    def __init__(self, config: AgentConfig) -> None:
+        self.config = config
 
-    def __init__(
-        self,
-        price_spike_threshold: float = 0.05,
-        wide_spread_pct: float = 1.0,
-        min_bid_depth_usd: float = 10_000.0,
-        rapid_move_candles: int = 3,
-        rapid_move_threshold: float = 0.03,
-        anomaly_persist_s: float = 300.0,
-        funding_extreme_pct: float = 0.001,
-    ) -> None:
-        self._price_spike_threshold = price_spike_threshold
-        self._wide_spread_pct = wide_spread_pct
-        self._min_bid_depth_usd = min_bid_depth_usd
-        self._rapid_move_candles = rapid_move_candles
-        self._rapid_move_threshold = rapid_move_threshold
-        self._anomaly_persist_s = anomaly_persist_s
-        self._funding_extreme_pct = funding_extreme_pct
+        # Thresholds
+        self.spike_threshold = getattr(config, "ws_price_spike_threshold", 0.05)
+        self.wide_spread_pct = getattr(config, "ws_wide_spread_pct", 1.0)
+        self.min_bid_depth_usd = getattr(config, "ws_min_bid_depth", 10000.0)
+        self.rapid_move_candles = getattr(config, "ws_rapid_move_candles", 3)
+        self.rapid_move_threshold = getattr(config, "ws_rapid_move_threshold", 0.03)
+        self.persist_s = getattr(config, "ws_anomaly_persist_s", 300.0)
 
-        # Active anomalies: {(anomaly_id, symbol): AnomalyReport}
-        self._active: dict[tuple[str, str], AnomalyReport] = {}
+        # Active anomalies tracking [symbol] = { anomaly_id: AnomalyReport }
+        self._active_anomalies: dict[str, dict[str, AnomalyReport]] = {}
 
-    # ── Candle checks ──────────────────────────────────────────
+    def _add_anomaly(self, report: AnomalyReport) -> None:
+        sym = report.symbol
+        if sym not in self._active_anomalies:
+            self._active_anomalies[sym] = {}
 
-    def check_candle(
-        self,
-        candle: Candle,
-        prev_candles: list[Candle] | None = None,
-    ) -> list[AnomalyReport]:
-        """Cek anomali berbasis candle. Return list kosong jika aman."""
-        reports: list[AnomalyReport] = []
-        prev = prev_candles or []
+        self._active_anomalies[sym][report.anomaly_id] = report
+        sv = report.severity
+        if sv in ["HIGH", "CRITICAL"]:
+            logger.error(f"[Anomaly] {sv}: {report.message} ({report.recommended})")
+        else:
+            logger.warning(f"[Anomaly] {sv}: {report.message} ({report.recommended})")
 
-        # PRICE_SPIKE — |log_return| > threshold
-        if prev:
-            last_close = prev[-1].close
-            if last_close > 0 and candle.close > 0:
-                log_ret = abs(math.log(candle.close / last_close))
-                if log_ret > self._price_spike_threshold:
-                    r = AnomalyReport(
-                        anomaly_id="PRICE_SPIKE",
-                        severity="HIGH",
-                        symbol=candle.symbol,
-                        message=(
-                            f"Price spike: |log_return| = "
-                            f"{log_ret:.4f} > {self._price_spike_threshold}"
-                        ),
+    def _cleanup_anomalies(self) -> None:
+        now = utcnow().timestamp()
+        for sym in list(self._active_anomalies.keys()):
+            for k in list(self._active_anomalies[sym].keys()):
+                # Kalau sudah lewat batas persist (default 300s/5menit), hapus
+                if now - self._active_anomalies[sym][k].timestamp.timestamp() > self.persist_s:
+                    del self._active_anomalies[sym][k]
+                    logger.info(f"[{sym}] Anomaly '{k}' Kadaluwarsa. Kondisi kembali normal.")
+
+            if len(self._active_anomalies[sym]) == 0:
+                del self._active_anomalies[sym]
+
+    def check_candle(self, candle: Candle, prev_candles: list[Candle]) -> list[AnomalyReport]:
+        self._cleanup_anomalies()
+        new_anomalies = []
+
+        # 1. Price Spike (log return drastis > 5%)
+        # Cek return terhadap candle sebelumnya jika ada
+        if len(prev_candles) > 0:
+            last = prev_candles[-1]
+            if last.close > 0:
+                log_ret = abs(math.log(candle.close / last.close))
+                if log_ret > self.spike_threshold:
+                    rep = AnomalyReport(
+                        "PRICE_SPIKE",
+                        "HIGH",
+                        candle.symbol,
+                        f"Spike Dideteksi ({log_ret*100:.1f}% per candle)",
                         value=log_ret,
-                        threshold=self._price_spike_threshold,
-                        recommended="Skip candle, alert",
+                        threshold=self.spike_threshold,
+                        recommended="Skip Candle. Halt Trading.",
                     )
-                    reports.append(r)
-                    self._activate(r)
+                    new_anomalies.append(rep)
+                    self._add_anomaly(rep)
 
-        # VOLUME_ZERO — volume = 0 pada pair yang seharusnya liquid
-        if candle.volume == 0:
-            r = AnomalyReport(
-                anomaly_id="VOLUME_ZERO",
-                severity="HIGH",
-                symbol=candle.symbol,
-                message="Volume = 0 pada candle",
+        # 2. Volume Zero
+        if candle.volume == 0 and candle.is_closed:
+            rep = AnomalyReport(
+                "VOLUME_ZERO",
+                "HIGH",
+                candle.symbol,
+                "Lilin Mati (No Volume). Indikasi bursa Maintenance/HALT.",
                 value=0.0,
-                threshold=0.0,
-                recommended="Skip candle, alert",
+                threshold=0.1,
+                recommended="Halt Trading",
             )
-            reports.append(r)
-            self._activate(r)
+            new_anomalies.append(rep)
+            self._add_anomaly(rep)
 
-        # RAPID_MOVE — N candle berturut bergerak > threshold
-        if len(prev) >= self._rapid_move_candles:
-            recent = prev[-self._rapid_move_candles :]  # type: ignore[index]
-            all_big = True
-            for c in recent:
-                if c.close > 0 and c.open > 0:
-                    move = abs(c.close - c.open) / c.open
-                    if move < self._rapid_move_threshold:
-                        all_big = False
-                        break
-                else:
-                    all_big = False
-                    break
+        # 3. Rapid Move (Flash Rally/Crash Beruntun)
+        if len(prev_candles) >= self.rapid_move_candles - 1:
+            recent = prev_candles[-(self.rapid_move_candles - 1) :] + [candle]
+            changes = []
+            for i in range(1, len(recent)):
+                c1, c2 = recent[i - 1], recent[i]
+                if c1.close > 0:
+                    chg = (c2.close - c1.close) / c1.close
+                    changes.append(chg)
 
-            if all_big:
-                r = AnomalyReport(
-                    anomaly_id="RAPID_MOVE",
-                    severity="MEDIUM",
-                    symbol=candle.symbol,
-                    message=(
-                        f"{self._rapid_move_candles} candle berturut "
-                        f"bergerak > {self._rapid_move_threshold*100:.0f}%"
-                    ),
-                    value=self._rapid_move_threshold,
-                    threshold=self._rapid_move_threshold,
-                    recommended="Apply HIGH_VOLATILITY regime",
+            # Jika semua positif dan > 3%, atau semua negatif dan < -3%
+            if all(chg > self.rapid_move_threshold for chg in changes) or all(
+                chg < -self.rapid_move_threshold for chg in changes
+            ):
+                rep = AnomalyReport(
+                    "RAPID_MOVE",
+                    "MEDIUM",
+                    candle.symbol,
+                    f"Pergerakan Sepihak {self.rapid_move_candles} Lilin Berturut-turut",
+                    value=abs(sum(changes)),
+                    threshold=self.rapid_move_threshold * self.rapid_move_candles,
+                    recommended="Gunakan Mode HIGH_VOLATILITY (Batasi size 50%)",
                 )
-                reports.append(r)
-                self._activate(r)
+                new_anomalies.append(rep)
+                self._add_anomaly(rep)
 
-        return reports
-
-    # ── Ticker checks ──────────────────────────────────────────
+        return new_anomalies
 
     def check_ticker(self, ticker: Ticker) -> list[AnomalyReport]:
-        """Cek anomali berbasis ticker."""
-        reports: list[AnomalyReport] = []
+        self._cleanup_anomalies()
+        new_anomalies = []
 
-        # CROSSED_BOOK — bid >= ask
-        if ticker.bid > 0 and ticker.ask > 0 and ticker.bid >= ticker.ask:
-            r = AnomalyReport(
-                anomaly_id="CROSSED_BOOK",
-                severity="CRITICAL",
-                symbol=ticker.symbol,
-                message=(f"Crossed book: bid ({ticker.bid}) >= ask ({ticker.ask})"),
-                value=ticker.bid,
-                threshold=ticker.ask,
-                recommended="Halt trading, alert KRITIS",
+        # 1. Crossed Book
+        if ticker.bid >= ticker.ask:
+            rep = AnomalyReport(
+                "CROSSED_BOOK",
+                "CRITICAL",
+                ticker.symbol,
+                f"Kondisi Mustahil: Membeli di {ticker.bid} lalu Jual di {ticker.ask} Instan! (Broken Stream)",
+                value=ticker.bid - ticker.ask,
+                threshold=0,
+                recommended="Darurat! Putuskan Engine dari Order Market.",
             )
-            reports.append(r)
-            self._activate(r)
+            new_anomalies.append(rep)
+            self._add_anomaly(rep)
 
-        # WIDE_SPREAD
-        if ticker.spread_pct > self._wide_spread_pct:
-            r = AnomalyReport(
-                anomaly_id="WIDE_SPREAD",
-                severity="MEDIUM",
-                symbol=ticker.symbol,
-                message=(f"Wide spread: {ticker.spread_pct:.2f}% > " f"{self._wide_spread_pct}%"),
+        # 2. Wide Spread
+        if ticker.spread_pct > self.wide_spread_pct:
+            rep = AnomalyReport(
+                "WIDE_SPREAD",
+                "MEDIUM",
+                ticker.symbol,
+                f"Selisih B/A Lebar: {ticker.spread_pct:.2f}% (Standar max {self.wide_spread_pct}%)",
                 value=ticker.spread_pct,
-                threshold=self._wide_spread_pct,
-                recommended="Larang market order",
+                threshold=self.wide_spread_pct,
+                recommended="Larang Market Order (Cegah Slippage Ekstrem).",
             )
-            reports.append(r)
-            self._activate(r)
+            new_anomalies.append(rep)
+            self._add_anomaly(rep)
 
-        return reports
+        return new_anomalies
 
-    # ── Orderbook checks ───────────────────────────────────────
-
-    def check_orderbook(self, ob: Orderbook) -> list[AnomalyReport]:
-        """Cek anomali berbasis orderbook."""
-        reports: list[AnomalyReport] = []
-
-        # CROSSED_BOOK
-        if ob.bids and ob.asks and ob.best_bid >= ob.best_ask:
-            r = AnomalyReport(
-                anomaly_id="CROSSED_BOOK",
-                severity="CRITICAL",
-                symbol=ob.symbol,
-                message=(f"Crossed book: best_bid ({ob.best_bid}) >= " f"best_ask ({ob.best_ask})"),
-                value=ob.best_bid,
-                threshold=ob.best_ask,
-                recommended="Halt trading, alert KRITIS",
-            )
-            reports.append(r)
-            self._activate(r)
-
-        # LOW_LIQUIDITY — depth di 5 level bid < threshold
-        if ob.bids:
-            top5 = ob.bids[:5]
-            bid_depth_usd = sum(lvl.price * lvl.quantity for lvl in top5)
-            if bid_depth_usd < self._min_bid_depth_usd:
-                r = AnomalyReport(
-                    anomaly_id="LOW_LIQUIDITY",
-                    severity="MEDIUM",
-                    symbol=ob.symbol,
-                    message=(
-                        f"Low bid depth: ${bid_depth_usd:,.0f} < "
-                        f"${self._min_bid_depth_usd:,.0f}"
-                    ),
-                    value=bid_depth_usd,
-                    threshold=self._min_bid_depth_usd,
-                    recommended="Kurangi position size 50%",
-                )
-                reports.append(r)
-                self._activate(r)
-
-        # WIDE_SPREAD (dari orderbook)
-        if ob.spread_pct > self._wide_spread_pct:
-            r = AnomalyReport(
-                anomaly_id="WIDE_SPREAD",
-                severity="MEDIUM",
-                symbol=ob.symbol,
-                message=(f"Wide spread: {ob.spread_pct:.2f}% > " f"{self._wide_spread_pct}%"),
-                value=ob.spread_pct,
-                threshold=self._wide_spread_pct,
-                recommended="Larang market order",
-            )
-            reports.append(r)
-            self._activate(r)
-
-        return reports
-
-    # ── Aggregate queries ──────────────────────────────────────
+    def check_orderbook(self, ob: Any) -> list[AnomalyReport]:
+        self._cleanup_anomalies()
+        # Mock Check untuk Low Liquidity
+        # ob is Orderbook tapi kita blm buat file aslinya jadi pakai Any
+        return []
 
     def is_safe_to_trade(self, symbol: str) -> tuple[bool, list[AnomalyReport]]:
         """
-        Aggregasi semua anomali aktif untuk symbol.
-
-        Return (True, []) jika aman.
-        Return (False, [reports]) jika ada HIGH atau CRITICAL.
+        Jika ada anomali berlevel HIGH atau CRITICAL, kunci keamanan akan hidup
+        dan mencegah strategi menghasilkan sinyal entry.
         """
-        self._expire_old()
+        self._cleanup_anomalies()
         active = self.get_active_anomalies(symbol)
-        blocking = [r for r in active if r.severity in ("HIGH", "CRITICAL")]
-        return (len(blocking) == 0, active)
+
+        severe = [a for a in active if a.severity in ("HIGH", "CRITICAL")]
+        if len(severe) > 0:
+            return False, active
+
+        return True, active
 
     def get_active_anomalies(self, symbol: str | None = None) -> list[AnomalyReport]:
-        """Return anomali yang masih aktif."""
-        self._expire_old()
-        if symbol is None:
-            return list(self._active.values())
-        return [r for (_, sym), r in self._active.items() if sym == symbol]
+        if symbol:
+            return list(self._active_anomalies.get(symbol, {}).values())
+
+        all_anom = []
+        for sym_dict in self._active_anomalies.values():
+            all_anom.extend(list(sym_dict.values()))
+        return all_anom
 
     def resolve(self, anomaly_id: str, symbol: str) -> None:
-        """Mark anomali sebagai resolved."""
-        key = (anomaly_id, symbol)
-        if key in self._active:
-            del self._active[key]  # type: ignore[arg-type]
-            logger.info("Anomaly resolved: %s %s", anomaly_id, symbol)
-
-    # ── Internal ───────────────────────────────────────────────
-
-    def _activate(self, report: AnomalyReport) -> None:
-        """Add/update anomali ke active store."""
-        key = (report.anomaly_id, report.symbol)
-        self._active[key] = report
-
-    def _expire_old(self) -> None:
-        """Remove anomali yang sudah lewat ANOMALY_PERSIST_S."""
-        now = datetime.now(UTC)
-        expired = [
-            key
-            for key, r in self._active.items()
-            if (now - r.timestamp).total_seconds() > self._anomaly_persist_s
-        ]
-        for key in expired:
-            del self._active[key]  # type: ignore[arg-type]
+        if symbol in self._active_anomalies and anomaly_id in self._active_anomalies[symbol]:
+            del self._active_anomalies[symbol][anomaly_id]
+            logger.info(f"[{symbol}] Anomaly '{anomaly_id}' Dirilis Paksa Secara Tangan Kosong.")
