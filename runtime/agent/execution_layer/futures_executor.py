@@ -34,6 +34,7 @@ class FuturesExecutor:
         self._leverage_cache: dict[str, int] = {}
 
     async def _get_last_price(self, symbol: str) -> float:
+        # Panggil endpoint public / ticker bila di-implement, mock for now
         return 50000.0
 
     async def _ensure_leverage(self, symbol: str, leverage: int) -> None:
@@ -74,19 +75,21 @@ class FuturesExecutor:
         return await self._exchange.place_order(order)
 
     async def close_position(
-        self, symbol: str, qty: float, urgency: str = "normal"
+        self, symbol: str, qty: float, current_side: str, urgency: str = "normal"
     ) -> OrderResponse:
-        """Penutupan posisi wajib diset reduce_only=True"""
+        """Penutupan posisi wajib diset reduce_only=True. current_side='BUY' (long) or 'SELL' (short)"""
+        close_side = "SELL" if current_side.upper() == "BUY" else "BUY"
+
         order = OrderRequest(
             symbol=symbol,
-            side="SELL",  # Logic SELL untuk close long (bisa ditambahkan conditional short close = buy)
+            side=close_side,
             order_type="MARKET",
             quantity=self._exchange.round_quantity(qty, symbol),
             client_order_id=generate_order_id("close_futures", symbol),
             time_in_force="IOC" if urgency == "urgent" else "GTC",
             price=0.0,
             is_futures=True,
-            reduce_only=True,  # Sangat mutlak dibutuhkan Binance untuk mencegah reverse floating posisi
+            reduce_only=True,  # Sangat mutlak dibutuhkan Binance Futures
             leverage=self._leverage_cache.get(symbol, 1),
         )
         return await self._exchange.place_order(order)

@@ -9,7 +9,12 @@ Import semua model dari sini:
 # ── Audit ─────────────────────────────────────────────────────────
 from runtime.agent.models.audit import AuditEvent, RecoveryReport  # type: ignore
 from runtime.agent.models.enums import (  # type: ignore
+    AlertSeverity,
     CircuitState,
+    ComponentStatus,
+    ConnStatus,
+    ExitAction,
+    HeartbeatStatus,
     MarketRegime,
     OrderSide,
     OrderType,
@@ -17,6 +22,14 @@ from runtime.agent.models.enums import (  # type: ignore
     TimeInForce,
     TradeStatus,
     TradingMode,
+)
+
+# ── Exit layer ────────────────────────────────────────────────────
+from runtime.agent.models.exit import (  # type: ignore
+    HOLD_DECISION,
+    ExitDecision,
+    TPState,
+    TrailingState,
 )
 
 # ── Market data ────────────────────────────────────────────────────
@@ -38,6 +51,18 @@ from runtime.agent.models.market import (  # type: ignore
     Ticker,
     ValidationResult,
     VolatilityMetrics,
+)
+
+# ── Monitoring & Sync ─────────────────────────────────────────────
+from runtime.agent.models.monitoring import (  # type: ignore
+    Alert,
+    BalanceSyncReport,
+    ComponentHealth,
+    Discrepancy,
+    HealthReport,
+    OrderSyncReport,
+    PositionSyncReport,
+    ReconciliationReport,
 )
 
 # ── Risk layer ────────────────────────────────────────────────────
@@ -63,6 +88,11 @@ __all__ = [
     "OrderType",
     "TimeInForce",
     "TradingMode",
+    "ExitAction",
+    "ComponentStatus",
+    "HeartbeatStatus",
+    "ConnStatus",
+    "AlertSeverity",
     # Market
     "Candle",
     "Ticker",
@@ -87,6 +117,20 @@ __all__ = [
     # Risk
     "TradeRequest",
     "RiskResult",
+    # Exit
+    "ExitDecision",
+    "HOLD_DECISION",
+    "TrailingState",
+    "TPState",
+    # Monitoring & Sync
+    "ComponentHealth",
+    "HealthReport",
+    "Alert",
+    "BalanceSyncReport",
+    "OrderSyncReport",
+    "PositionSyncReport",
+    "Discrepancy",
+    "ReconciliationReport",
     # Trade
     "Trade",
     "OrderRequest",

@@ -51,7 +51,7 @@ class RecoveryManager:
         unresolved = []
 
         # Step 1: Load semua trade non-closed dari state.db
-        active_trades = self._store.get_all_active()
+        active_trades = await self._store.get_all_active()
         log.info(f"Recovery: found {len(active_trades)} active trades")
 
         for trade in active_trades:
@@ -60,7 +60,7 @@ class RecoveryManager:
                 # Paper mode tidak perlu call exchange sungguhan
                 if trade.mode == "paper":
                     if trade.status == TradeStatus.SUBMITTED:
-                        self._store.update_status(
+                        await self._store.update_status(
                             trade.trade_id, TradeStatus.OPEN, opened_at=utcnow()
                         )
                         actions.append(f"PAPER MOCK {trade.trade_id} -> OPEN")
@@ -73,7 +73,7 @@ class RecoveryManager:
                 # Step 3: Rekonsiliasi Status
                 if ex_status.status == "FILLED" and not trade.is_open:
                     # Trade sudah terisi (filled) tapi di DB internal masih SUBMITTED/PENDING
-                    self._store.update_status(
+                    await self._store.update_status(
                         trade.trade_id,
                         TradeStatus.OPEN,
                         filled_qty=ex_status.filled_qty,
@@ -84,17 +84,15 @@ class RecoveryManager:
                     actions.append(f"UPDATED to OPEN: {trade.trade_id}")
 
                 elif ex_status.status == "CANCELLED":
-                    self._store.update_status(trade.trade_id, TradeStatus.CANCELLED)
+                    await self._store.update_status(trade.trade_id, TradeStatus.CANCELLED)
                     actions.append(f"SYNCED CANCELLED: {trade.trade_id}")
 
             except Exception as e:
-                # Disimulasikan jika error adalah order tidak ketemu (Not found) atau timeout
-                # "OrderNotFoundError" (sebagai pseudo-name error binance -2011 dll)
                 err_msg = str(e)
                 if "not found" in err_msg.lower() or "OrderNotFoundError" in str(type(e)):
                     if trade.status == TradeStatus.PENDING:
                         # order belum sempat masuk exchange sebelum system crash -> aman di-cancel
-                        self._store.update_status(
+                        await self._store.update_status(
                             trade.trade_id, TradeStatus.CANCELLED, updated_at=utcnow()
                         )
                         actions.append(f"PENDING -> CANCELLED: {trade.trade_id}")
@@ -108,17 +106,15 @@ class RecoveryManager:
                     warnings.append(f"Network error on syncing {trade.trade_id}: {err_msg}")
                     unresolved.append(trade)
 
-        # Step 4: Coba pastikan open trades di DB punya SL di exchange (misalkan kita letak SL di memory exchange)
-        # log.warning("Pastikan Anda update risk config stop loss di Exchange.")
-
         success = len(unresolved) == 0
         if not success:
             log.error(f"Recovery: {len(unresolved)} unresolved trades!")
-            # Trigger Emergency Safe_mode stop agar tidak jalan dengan DB gak sinkron
             if hasattr(self._safe_mode, "emergency_stop"):
-                await self._safe_mode.emergency_stop(
-                    "Recovery Failed! DB state dan Exchange asinkron."
-                )
+                # if emergency stop is async we wait for it
+                if __import__("inspect").iscoroutinefunction(self._safe_mode.emergency_stop):
+                    await self._safe_mode.emergency_stop("Recovery Failed! DB state dan Exchange asinkron.")
+                else:
+                    self._safe_mode.emergency_stop("Recovery Failed! DB state dan Exchange asinkron.")
 
         return RecoveryReport(
             total_checked=len(active_trades),

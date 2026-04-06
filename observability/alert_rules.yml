@@ -1,0 +1,81 @@
+groups:
+  - name: crypto_ai_agent_critical
+    interval: 30s
+    rules:
+      # Agent mati
+      - alert: AgentDead
+        expr: agent_alive == 0
+        for: 2m
+        labels: 
+          severity: critical
+        annotations:
+          summary: 'Agent tidak responsif selama 2 menit'
+          action: 'Cek health_restart.py, cek Docker logs'
+
+      # Circuit breaker aktif
+      - alert: CircuitBreakerHalted
+        expr: circuit_breaker_state == 2
+        for: 0m
+        labels: 
+          severity: critical
+        annotations:
+          summary: 'Circuit breaker HALTED — trading dihentikan'
+          action: 'Cek daily PnL dan drawdown. Lihat logs.'
+
+      # Drawdown kritis
+      - alert: DrawdownCritical
+        expr: drawdown_pct > 8
+        for: 5m
+        labels: 
+          severity: critical
+        annotations:
+          summary: 'Drawdown {{ $value }}% mendekati batas 10%'
+
+  - name: crypto_ai_agent_warning
+    interval: 60s
+    rules:
+      # WebSocket stale
+      - alert: WebSocketStale
+        expr: ws_last_message_age_s > 60
+        for: 2m
+        labels: 
+          severity: warning
+        annotations:
+          summary: 'WebSocket tidak menerima data selama {{ $value }}s'
+
+      # API weight tinggi
+      - alert: APIWeightHigh
+        expr: api_weight_used > 900
+        for: 5m
+        labels: 
+          severity: warning
+        annotations:
+          summary: 'API weight {{ $value }}/1200 — mendekati rate limit Binance'
+
+      # Win rate rendah
+      - alert: WinRateLow
+        expr: win_rate_30d < 40  # atau 0.40 tergantung setup metriknya
+        for: 0m
+        labels: 
+          severity: warning
+        annotations:
+          summary: 'Win rate 30h {{ $value }}% di bawah batas 40%'
+
+      # Daily PnL negatif besar
+      - alert: DailyPnLNegative
+        expr: daily_pnl_usd < -(equity_usd * 0.03)
+        for: 0m
+        labels: 
+          severity: warning
+        annotations:
+          summary: 'Daily PnL sudah -{{ $value }} USD (>3% equity)'
+
+      # LLM budget hampir habis
+      - alert: LLMBudgetLow
+        # Asumsikan budget harian LLM $5
+        expr: llm_cost_usd_total > 5.0 * 0.80
+        for: 0m
+        labels: 
+          severity: info
+        annotations:
+          summary: 'LLM budget sudah lebih dari 80% terpakai hari ini'

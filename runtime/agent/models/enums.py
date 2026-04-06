@@ -76,3 +76,59 @@ class TradingMode(str, Enum):
     PAPER = "paper"
     SHADOW = "shadow"
     LIVE = "live"
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Exit Layer
+# ══════════════════════════════════════════════════════════════════════
+
+
+class ExitAction(str, Enum):
+    """Aksi yang diputuskan oleh ExitManager untuk satu posisi."""
+
+    HOLD = "hold"  # jangan lakukan apa-apa
+    EXIT_SL = "exit_sl"  # stop loss tercapai
+    EXIT_TP = "exit_tp"  # take profit tercapai
+    EXIT_TRAIL = "exit_trail"  # trailing stop tercapai
+    EXIT_SIGNAL = "exit_signal"  # strategi minta keluar
+    EXIT_TIMEOUT = "exit_timeout"  # posisi terlalu lama
+    EXIT_FORCED = "exit_forced"  # circuit breaker / safe mode
+    UPDATE_SL = "update_sl"  # geser SL (breakeven / trailing)
+    PARTIAL_CLOSE = "partial_close"  # tutup sebagian posisi
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Monitoring Layer
+# ══════════════════════════════════════════════════════════════════════
+
+
+class ComponentStatus(str, Enum):
+    """Status kesehatan satu komponen sistem."""
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"  # masih jalan tapi tidak optimal
+    UNHEALTHY = "unhealthy"  # perlu intervensi
+
+
+class HeartbeatStatus(str, Enum):
+    """Status heartbeat agent."""
+
+    ALIVE = "alive"
+    STALE = "stale"  # pulse ada tapi sudah lama
+    DEAD = "dead"  # tidak ada pulse → trigger restart
+
+
+class ConnStatus(str, Enum):
+    """Status koneksi ke endpoint."""
+
+    UP = "up"
+    SLOW = "slow"  # response > 2000ms
+    DOWN = "down"  # timeout atau error
+
+
+class AlertSeverity(str, Enum):
+    """Tingkat keparahan alert."""
+
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"  # bangunkan operator

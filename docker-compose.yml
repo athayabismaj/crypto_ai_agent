@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  agent:
+    build: .
+    container_name: crypto_ai_agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./runtime/agent/memory:/app/runtime/agent/memory
+      - ./audit:/app/audit
+      - ./runtime/agent/models:/app/runtime/agent/models
+    ports:
+      - "8090:8090"
+    command: python runtime/agent/core/main.py
+
+  scheduler:
+    build: .
+    container_name: crypto_ai_scheduler
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./runtime/agent/memory:/app/runtime/agent/memory
+      - ./backup:/app/backup
+    entrypoint: >
+      /bin/sh -c "
+      echo '0 2 * * 0 python /app/automation/scheduler.py retrain' >> /etc/cron.d/agent-cron &&
+      echo '0 1 * * * python /app/automation/scheduler.py rotate' >> /etc/cron.d/agent-cron &&
+      echo '0 3 * * 0 python /app/automation/scheduler.py vacuum' >> /etc/cron.d/agent-cron &&
+      echo '0 4 * * * python /app/automation/scheduler.py backup' >> /etc/cron.d/agent-cron &&
+      chmod 0644 /etc/cron.d/agent-cron &&
+      crontab /etc/cron.d/agent-cron &&
+      cron -f"
+
+  health:
+    build: .
+    container_name: crypto_ai_health
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./runtime/agent/memory:/app/runtime/agent/memory
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: python automation/health_restart.py
+
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: crypto_ai_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: crypto_ai_grafana
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus_data:
+  grafana_data:

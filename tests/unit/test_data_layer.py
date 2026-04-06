@@ -9,8 +9,8 @@ from runtime.agent.data_layer import (  # type: ignore
     AnomalyDetector,
     BinanceRateLimiter,
     DataValidator,
-    MarketDataFeed,
-    OrderbookManager,
+    MarketAPI,
+    OrderbookStore,
     WebSocketClient,
 )
 from runtime.agent.models import (  # type: ignore
@@ -266,35 +266,35 @@ class TestAnomalyDetector:
 
 
 # ================================================================
-#  MarketDataFeed Tests
+#  MarketAPI Tests
 # ================================================================
 
 
-class TestMarketDataFeed:
+class TestMarketAPI:
     def test_cache_hit(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         mdf._set_cache("test", [1, 2, 3], ttl_s=60.0)
         assert mdf._get_cache("test") == [1, 2, 3]
 
     def test_cache_miss(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         assert mdf._get_cache("nonexistent") is None
 
     def test_cache_expired(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         # Set with TTL in the past
         mdf._cache["test"] = (0.0, "old_data")
         assert mdf._get_cache("test") is None
 
     def test_invalidate_all(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         mdf._set_cache("a", 1, ttl_s=60)
         mdf._set_cache("b", 2, ttl_s=60)
         mdf.invalidate_cache()
         assert len(mdf._cache) == 0
 
     def test_invalidate_key(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         mdf._set_cache("a", 1, ttl_s=60)
         mdf._set_cache("b", 2, ttl_s=60)
         mdf.invalidate_cache("a")
@@ -302,7 +302,7 @@ class TestMarketDataFeed:
         assert mdf._get_cache("b") == 2
 
     def test_parse_candles(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         raw = [
             [
                 1672531200000,
@@ -325,14 +325,14 @@ class TestMarketDataFeed:
         assert candles[0].symbol == "BTCUSDT"
 
     def test_parse_ticker(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         raw = {"bidPrice": "50000.0", "askPrice": "50010.0"}
         ticker = mdf._parse_ticker(raw, "BTCUSDT")
         assert ticker.bid == 50000.0
         assert ticker.ask == 50010.0
 
     def test_parse_balance(self):
-        mdf = MarketDataFeed()
+        mdf = MarketAPI()
         raw = {
             "balances": [
                 {"asset": "USDT", "free": "1000.0", "locked": "200.0"},
@@ -517,10 +517,10 @@ class TestWebSocketClient:
     def test_record_message(self):
         ws = WebSocketClient()
         ws._ensure_stream("test_stream")
-        ws._streams["test_stream"].state = StreamState.CONNECTED
+        ws._streams["test_stream"].state = WsState.CONNECTED
         ws._record_message("test_stream")
         assert ws._streams["test_stream"].message_count == 1
         assert ws._streams["test_stream"].last_message_at is not None
 
 
-from runtime.agent.data_layer.websocket_client import StreamState  # type: ignore  # noqa: E402
+from runtime.agent.data_layer.websocket_client import WsState  # type: ignore  # noqa: E402

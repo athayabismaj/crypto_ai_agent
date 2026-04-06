@@ -1,6 +1,7 @@
 """
 Manager.py - Orchestrator dari Siklus Hidup Trade Layer.
 Semua trade dibuka, dikelola, dan ditutup melalui modul ini.
+Versi Asinkron penuh.
 """
 
 import logging
@@ -15,7 +16,6 @@ from runtime.agent.trade_layer.trade_validator import TradeValidator
 from runtime.shared.utils import utcnow  # type: ignore
 
 
-# Dummy Exception Classes for execution logic
 class TradeValidationError(Exception):
     pass
 
@@ -58,7 +58,7 @@ class TradeManager:
         Mengeksekusi persetujuan buka posisi, mencatat ke audit dan store,
         lalu mendelegasikan perintah API ke execution_layer.
         """
-        # Step 1: Validasi ulang
+        # Step 1: Validasi
         ok, msg = self._validator.validate(signal, risk_result)
         if not ok:
             raise TradeValidationError(msg)
@@ -86,16 +86,16 @@ class TradeManager:
         )
 
         # Step 3: Idempotency Check & Register (Mengatasi pencet double / bug loop)
-        idem_result = self._idempotency.check_or_register(trade.client_order_id)
+        idem_result = await self._idempotency.check_or_register(trade.client_order_id)
         if idem_result == IdempotencyResult.DUPLICATE:
             raise DuplicateOrderError(f"Duplicate order: {trade.client_order_id}")
 
-        # Step 4: Simpan ke SQLite state.db
+        # Step 4: Simpan ke State DB as PENDING
         trade.status = TradeStatus.PENDING
-        self._store.save(trade)
+        await self._store.save(trade)
 
-        # Audit Trail (Imbuhan Log Kebenaran)
-        self._audit.record(
+        # Audit Trail
+        await self._audit.record(
             trade,
             "CREATED",
             actor="manager",
@@ -112,10 +112,10 @@ class TradeManager:
         # Step 5: Eksekusi (Paper mode vs Live mode)
         trade.status = TradeStatus.SUBMITTED
         trade.submitted_at = utcnow()
-        self._store.save(trade)
+        await self._store.save(trade)
 
         try:
-            self._audit.record(
+            await self._audit.record(
                 trade,
                 "SUBMITTED",
                 actor="manager",
@@ -125,19 +125,23 @@ class TradeManager:
                 },
             )
 
-            if self.config.mode == "paper":
+            if getattr(self.config, "mode", "paper") == "paper":
                 response = self._simulate_fill(trade)
             else:
                 order_req = trade.to_order_request()
                 response = await self._executor.place_order(order_req)
 
             # Step 6: Confirmation Callback Update
-            trade = self.confirm(trade, response)
+            trade = await self.confirm(trade, response)
 
             # Hubungkan Event Bus agar module lain dapat merespons
             if hasattr(self._event_bus, "publish"):
-                # 'EventType.TRADE_OPENED' = 1004 (misal)
-                getattr(self._event_bus, "publish")("TRADE_OPENED", trade, "trade_manager")
+                # Kita anggap event method adalah async di fase lanjut
+                # atau synchronous depending on event_bus implementation.
+                if __import__("inspect").iscoroutinefunction(getattr(self._event_bus, "publish")):
+                    await getattr(self._event_bus, "publish")("TRADE_OPENED", trade, "trade_manager")
+                else:
+                    getattr(self._event_bus, "publish")("TRADE_OPENED", trade, "trade_manager")
 
             log.info(
                 f"Trade opened [{trade.trade_id}] {trade.symbol} {trade.side} qty: {trade.filled_qty} at {trade.avg_fill_price}"
@@ -145,12 +149,12 @@ class TradeManager:
             return trade
 
         except Exception as e:
-            self._idempotency.mark_failed(trade.client_order_id, str(e))
-            self._store.update_status(trade.trade_id, TradeStatus.FAILED, exit_reason=str(e))
-            self._audit.record(trade, "FAILED", actor="manager", details={"reason": str(e)})
+            await self._idempotency.mark_failed(trade.client_order_id, str(e))
+            await self._store.update_status(trade.trade_id, TradeStatus.FAILED, exit_reason=str(e))
+            await self._audit.record(trade, "FAILED", actor="manager", details={"reason": str(e)})
             raise
 
-    def confirm(self, trade: Trade, response: Any) -> Trade:
+    async def confirm(self, trade: Trade, response: Any) -> Trade:
         """Update trade setelah menerima konfirmasi FILLED dari Execution Layer"""
         trade.exchange_order_id = response.exchange_order_id
         trade.filled_qty = response.filled_qty
@@ -159,11 +163,10 @@ class TradeManager:
         trade.status = TradeStatus.OPEN
         trade.opened_at = response.timestamp or utcnow()
 
-        # Update persistensi ke Storage SQLite WAL Mode
-        self._store.save(trade)
-        self._idempotency.confirm(trade.client_order_id)
+        await self._store.save(trade)
+        await self._idempotency.confirm(trade.client_order_id)
 
-        self._audit.record(
+        await self._audit.record(
             trade,
             "FILLED",
             actor="manager",
@@ -177,15 +180,13 @@ class TradeManager:
         return trade
 
     def _simulate_fill(self, trade: Trade) -> Any:
-        # Simulasi harga paper account, tidak ada slippage yang kompleks.
-        # Fetch harga fiktif melalui portfolio_state
+        # Simulasi harga paper account
         last_price = 50000.0  # dummy default
         if hasattr(self._portfolio_state, "get"):
             last_price = self._portfolio_state.get(
                 f"last_price_{trade.symbol}", trade.limit_price or last_price
             )
 
-        # Membuat OrderResponse buatan (mock string object with dot notation)
         class MockResponse:
             exchange_order_id = f"paper_{trade.client_order_id}"
             client_order_id = trade.client_order_id
@@ -199,7 +200,7 @@ class TradeManager:
         return MockResponse()
 
     async def close(self, trade: Trade, reason: str, pnl_usd: float = 0.0) -> Trade:
-        """Menutup posisi. Akan dikembangkan logic close_position() detailnya via execution layer"""
+        """Menutup posisi."""
         trade.status = TradeStatus.CLOSED
         trade.closed_at = utcnow()
         trade.exit_reason = reason
@@ -211,10 +212,9 @@ class TradeManager:
         if trade.notional > 0:
             trade.pnl_pct = (pnl_usd / trade.notional) * 100
 
-        self._store.save(trade)
-        self._store.archive(trade)  # Pindah state.db -> experience.db
+        await self._store.archive(trade)  # Archiving langsung save sekaligus hapus dari active pke transaction
 
-        self._audit.record(
+        await self._audit.record(
             trade,
             "CLOSED",
             actor="manager",
@@ -226,4 +226,25 @@ class TradeManager:
             },
         )
 
+        # Publish Event
+        if hasattr(self._event_bus, "publish"):
+            if __import__("inspect").iscoroutinefunction(getattr(self._event_bus, "publish")):
+                await getattr(self._event_bus, "publish")("TRADE_CLOSED", trade, "trade_manager")
+            else:
+                getattr(self._event_bus, "publish")("TRADE_CLOSED", trade, "trade_manager")
+
+        return trade
+
+    async def update_sl(self, trade: Trade, new_sl: float, actor: str = "manager") -> Trade:
+        """Update Stop Loss level pada sistem."""
+        old_sl = trade.sl_price
+        trade.sl_price = new_sl
+        await self._store.save(trade)
+        await self._audit.record(
+            trade,
+            "SL_UPDATED",
+            actor=actor,
+            details={"old_sl": old_sl, "new_sl": new_sl}
+        )
+        log.info(f"Trade [{trade.trade_id}] SL updated: {old_sl} -> {new_sl}")
         return trade

@@ -58,15 +58,17 @@ class SpotExecutor:
         return await self._exchange.place_order(order)
 
     async def close_position(
-        self, symbol: str, qty: float, urgency: str = "normal"
+        self, symbol: str, qty: float, current_side: str = "BUY", urgency: str = "normal"
     ) -> OrderResponse:
         """
-        Tutup posisi spot dengan SELL market order khusus SPOT
+        Tutup posisi spot dengan SELL market order khusus SPOT (karena Spot buy first).
         urgency='urgent' → IOC order (immediate or cancel), jika tidak laku yaudah cancel aja sisa nya
         """
+        close_side = "SELL" if current_side.upper() == "BUY" else "BUY"
+        
         order = OrderRequest(
             symbol=symbol,
-            side="SELL",
+            side=close_side,
             order_type="MARKET",
             quantity=self._exchange.round_quantity(qty, symbol),
             client_order_id=generate_order_id("close_spot", symbol),
