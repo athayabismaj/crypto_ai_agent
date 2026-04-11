@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -127,6 +126,7 @@ class DeployManager:
             # Step 6: Smoke test — validasi model bisa di-load
             try:
                 import joblib
+
                 loaded = joblib.load(target_pkl)
                 if loaded is None:
                     raise ValueError("Model load menghasilkan None")
@@ -159,8 +159,10 @@ class DeployManager:
         if trained_model is None:
             return False
         try:
-            import joblib
             import tempfile
+
+            import joblib
+
             # Serialize ke temp, lalu deploy
             tmp_pkl = Path(tempfile.mktemp(suffix=".pkl"))
             joblib.dump(trained_model, tmp_pkl)

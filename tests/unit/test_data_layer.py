@@ -10,7 +10,6 @@ from runtime.agent.data_layer import (  # type: ignore
     BinanceRateLimiter,
     DataValidator,
     MarketAPI,
-    OrderbookStore,
     WebSocketClient,
 )
 from runtime.agent.models import (  # type: ignore

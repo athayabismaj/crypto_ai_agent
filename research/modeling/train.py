@@ -8,48 +8,48 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 log = logging.getLogger(__name__)
 
 
 @dataclass
 class TrainConfig:
-    model_type: str = "lightgbm"         # lightgbm | xgboost | random_forest
+    model_type: str = "lightgbm"  # lightgbm | xgboost | random_forest
     target_col: str = "target_return_4h"
-    task: str = "regression"             # regression | classification
+    task: str = "regression"  # regression | classification
     test_size: float = 0.2
-    n_splits: int = 5                    # untuk walk_forward
+    n_splits: int = 5  # untuk walk_forward
     early_stopping: int = 50
     verbose: int = 100
     output_dir: str = "research/models"
 
-    lgbm_params: dict = field(default_factory=lambda: {
-        "n_estimators": 1000,
-        "learning_rate": 0.05,
-        "num_leaves": 31,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "reg_alpha": 0.1,
-        "reg_lambda": 0.1,
-    })
+    lgbm_params: dict = field(
+        default_factory=lambda: {
+            "n_estimators": 1000,
+            "learning_rate": 0.05,
+            "num_leaves": 31,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.1,
+            "reg_lambda": 0.1,
+        }
+    )
 
 
 @dataclass
 class TrainedModel:
-    model: Any                              # estimator object
-    feature_names: list[str]                # WAJIB — runtime butuh ini
+    model: Any  # estimator object
+    feature_names: list[str]  # WAJIB — runtime butuh ini
     target_col: str
     model_type: str
     train_date_range: tuple[str, str]
-    metrics: dict                           # val_score, ic, dll
+    metrics: dict  # val_score, ic, dll
     config: TrainConfig
     version: str = "1.0.0"
 
@@ -88,7 +88,7 @@ def _build_estimator(config: TrainConfig) -> Any:
             )
 
     elif config.model_type == "random_forest":
-        from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+        from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
         if config.task == "regression":
             return RandomForestRegressor(n_estimators=500, n_jobs=-1, random_state=42)
@@ -117,8 +117,11 @@ def train_model(
     if feature_cols is None:
         exclude = {"timestamp", cfg.target_col}
         exclude.update(c for c in df.columns if c.startswith("target_"))
-        feature_cols = [c for c in df.columns if c not in exclude
-                        and df[c].dtype in (np.float64, np.float32, np.int64, float, int)]
+        feature_cols = [
+            c
+            for c in df.columns
+            if c not in exclude and df[c].dtype in (np.float64, np.float32, np.int64, float, int)
+        ]
 
     X = df[feature_cols].values
     y = df[cfg.target_col].values
@@ -128,7 +131,9 @@ def train_model(
     X_train, X_val = X[:split_idx], X[split_idx:]
     y_train, y_val = y[:split_idx], y[split_idx:]
 
-    log.info(f"Training {cfg.model_type}: train={len(X_train)}, val={len(X_val)}, features={len(feature_cols)}")
+    log.info(
+        f"Training {cfg.model_type}: train={len(X_train)}, val={len(X_val)}, features={len(feature_cols)}"
+    )
 
     estimator = _build_estimator(cfg)
 

@@ -38,8 +38,7 @@ class TrailingStopManager:
 
     # ── Public API ────────────────────────────────────────────────
 
-    def register(self, trade_id: str, side: str, entry_price: float,
-                 sl_price: float) -> None:
+    def register(self, trade_id: str, side: str, entry_price: float, sl_price: float) -> None:
         """Inisialisasi TrailingState saat posisi dibuka."""
         self._states[trade_id] = TrailingState(
             trade_id=trade_id,
@@ -50,8 +49,12 @@ class TrailingStopManager:
             lowest_low=entry_price,
             last_updated=datetime.now(UTC),
         )
-        logger.debug("[Trailing] Registered %s, method=%s, initial_trail=%.2f",
-                      trade_id, self.method, sl_price)
+        logger.debug(
+            "[Trailing] Registered %s, method=%s, initial_trail=%.2f",
+            trade_id,
+            self.method,
+            sl_price,
+        )
 
     def update(
         self,
@@ -78,8 +81,7 @@ class TrailingStopManager:
             profit_r = self._calc_profit_r(side, entry_price, sl_price, close)
             if profit_r >= self.activation_r:
                 state.activated = True
-                logger.info("[Trailing] Activated %s, profit_r=%.2f",
-                            trade_id, profit_r)
+                logger.info("[Trailing] Activated %s, profit_r=%.2f", trade_id, profit_r)
             else:
                 return None
 
@@ -97,8 +99,7 @@ class TrailingStopManager:
 
     # ── Private ───────────────────────────────────────────────────
 
-    def _calc_profit_r(self, side: str, entry: float, sl: float,
-                       close: float) -> float:
+    def _calc_profit_r(self, side: str, entry: float, sl: float, close: float) -> float:
         """Hitung profit dalam R (risk units)."""
         risk = abs(entry - sl)
         if risk <= 0:
@@ -108,8 +109,7 @@ class TrailingStopManager:
         else:
             return (entry - close) / risk
 
-    def _calc_trail_level(self, reference: float, atr: float,
-                          direction: str) -> float:
+    def _calc_trail_level(self, reference: float, atr: float, direction: str) -> float:
         """Hitung trail level berdasarkan metode."""
         if self.method == "percentage":
             if direction == "buy":
@@ -123,8 +123,12 @@ class TrailingStopManager:
                 return reference + (atr * self.atr_mult)
 
     def _update_buy_trail(
-        self, trade_id: str, state: TrailingState,
-        high: float, low: float, atr: float,
+        self,
+        trade_id: str,
+        state: TrailingState,
+        high: float,
+        low: float,
+        atr: float,
     ) -> ExitDecision | None:
         # Update highest high
         if high > state.highest_high:
@@ -164,8 +168,12 @@ class TrailingStopManager:
         return None
 
     def _update_sell_trail(
-        self, trade_id: str, state: TrailingState,
-        high: float, low: float, atr: float,
+        self,
+        trade_id: str,
+        state: TrailingState,
+        high: float,
+        low: float,
+        atr: float,
     ) -> ExitDecision | None:
         # Update lowest low
         if low < state.lowest_low:

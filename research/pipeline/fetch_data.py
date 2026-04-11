@@ -5,7 +5,6 @@ Output: file Parquet immutable di research/data/raw/
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
@@ -13,7 +12,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 log = logging.getLogger(__name__)
@@ -98,7 +96,10 @@ def fetch_ohlcv(
     df = pd.DataFrame(all_data, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
     # Filter in range
-    df = df[(df["timestamp"] >= start.replace(tzinfo=timezone.utc)) & (df["timestamp"] <= end.replace(tzinfo=timezone.utc))]
+    df = df[
+        (df["timestamp"] >= start.replace(tzinfo=timezone.utc))
+        & (df["timestamp"] <= end.replace(tzinfo=timezone.utc))
+    ]
     df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
     return df
 
@@ -119,11 +120,15 @@ def fetch_funding_rate(
         data = ex.fetch_funding_rate_history(symbol, since=int(start.timestamp() * 1000), limit=500)
         rows = []
         for entry in data:
-            rows.append({
-                "timestamp": pd.to_datetime(entry.get("timestamp", 0), unit="ms", utc=True),
-                "rate": entry.get("fundingRate", 0.0),
-                "next_time": pd.to_datetime(entry.get("nextFundingTimestamp", 0), unit="ms", utc=True),
-            })
+            rows.append(
+                {
+                    "timestamp": pd.to_datetime(entry.get("timestamp", 0), unit="ms", utc=True),
+                    "rate": entry.get("fundingRate", 0.0),
+                    "next_time": pd.to_datetime(
+                        entry.get("nextFundingTimestamp", 0), unit="ms", utc=True
+                    ),
+                }
+            )
         return pd.DataFrame(rows)
     except Exception as e:
         log.error(f"Gagal fetch funding rate {symbol}: {e}")
@@ -140,7 +145,13 @@ def fetch_orderbook_snap(
     ex = _get_exchange(exchange)
     try:
         ob = ex.fetch_order_book(symbol, limit=depth)
-        return [{"bids": ob["bids"][:depth], "asks": ob["asks"][:depth], "timestamp": ob.get("timestamp")}]
+        return [
+            {
+                "bids": ob["bids"][:depth],
+                "asks": ob["asks"][:depth],
+                "timestamp": ob.get("timestamp"),
+            }
+        ]
     except Exception as e:
         raise FetchError(f"Gagal fetch orderbook {symbol}: {e}") from e
 

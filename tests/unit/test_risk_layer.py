@@ -27,14 +27,14 @@ from __future__ import annotations
 import pytest
 
 from runtime.agent.models.enums import CircuitState, RiskVerdict  # type: ignore
-from runtime.agent.models.risk import RiskResult, TradeRequest  # type: ignore
+from runtime.agent.models.risk import TradeRequest  # type: ignore
 from runtime.agent.portfolio_layer.allocator import PortfolioAllocator  # type: ignore
 from runtime.agent.portfolio_layer.capital_manager import CapitalManager  # type: ignore
 from runtime.agent.portfolio_layer.correlation import CorrelationController  # type: ignore
 from runtime.agent.portfolio_layer.risk_budget import RiskBudgetManager  # type: ignore
 from runtime.agent.risk_layer.circuit_breaker import CircuitBreaker
 from runtime.agent.risk_layer.exposure_control import ExposureControl
-from runtime.agent.risk_layer.leverage_control import LeverageControl, GLOBAL_MAX_LEVERAGE
+from runtime.agent.risk_layer.leverage_control import GLOBAL_MAX_LEVERAGE, LeverageControl
 from runtime.agent.risk_layer.position_size import PositionSizer
 from runtime.agent.risk_layer.pre_trade_check import (
     PreTradeCheck,
@@ -43,7 +43,6 @@ from runtime.agent.risk_layer.pre_trade_check import (
 )
 from runtime.agent.risk_layer.risk_manager import RiskManager
 from runtime.agent.risk_layer.stoploss import StopLossManager
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -498,11 +497,7 @@ class TestPositionSizer:
         config.max_position_pct = 0.50
         ps = PositionSizer(config)
         req = _make_trade_request(price=50000.0, suggested_sl=49000.0)
-        state = {
-            "strategy_stats": {
-                "spot_v1": {"win_rate": 0.0, "avg_risk_reward": 1.5}
-            }
-        }
+        state = {"strategy_stats": {"spot_v1": {"win_rate": 0.0, "avg_risk_reward": 1.5}}}
         qty, warnings, _ = ps.calculate(req, 10000.0, state)
         # win_rate=0 should be reset to 0.5 internally
         assert len(warnings) > 0  # Should warn about invalid win_rate
@@ -759,9 +754,7 @@ class TestRiskManagerIntegration:
             "BTCUSDT": {"notional": 5000.0, "side": "BUY"},
             "ETHUSDT": {"notional": 5000.0, "side": "BUY"},
         }
-        req = _make_trade_request(
-            symbol="BTCUSDT", quantity=1.0, price=50000.0
-        )  # + 50000 notional
+        req = _make_trade_request(symbol="BTCUSDT", quantity=1.0, price=50000.0)  # + 50000 notional
         result = rm.evaluate(req, portfolio_state)
         # With btc_eth group limit 35% (3500 USDT) and already 10000 → should block
         # But it might be blocked by exposure first

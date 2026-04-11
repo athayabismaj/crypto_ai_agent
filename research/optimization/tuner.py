@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,11 +17,11 @@ log = logging.getLogger(__name__)
 @dataclass
 class OptConfig:
     n_trials: int = 100
-    n_jobs: int = -1              # parallel (-1 = semua core)
-    objective: str = "sharpe"     # sharpe | sortino | calmar | profit_factor
+    n_jobs: int = -1  # parallel (-1 = semua core)
+    objective: str = "sharpe"  # sharpe | sortino | calmar | profit_factor
     min_trades: int = 30
     timeout_seconds: int = 3600
-    sampler: str = "tpe"          # tpe | random | cma-es
+    sampler: str = "tpe"  # tpe | random | cma-es
 
 
 @dataclass
@@ -87,9 +87,8 @@ def _run_grid_search(
         elif isinstance(v, dict) and "low" in v and "high" in v:
             # Range → sample 10 titik
             import numpy as np
-            grid_values.append(
-                np.linspace(v["low"], v["high"], min(10, config.n_trials)).tolist()
-            )
+
+            grid_values.append(np.linspace(v["low"], v["high"], min(10, config.n_trials)).tolist())
         else:
             grid_values.append([v])
 

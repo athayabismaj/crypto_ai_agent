@@ -65,7 +65,7 @@ class SpotExecutor:
         urgency='urgent' → IOC order (immediate or cancel), jika tidak laku yaudah cancel aja sisa nya
         """
         close_side = "SELL" if current_side.upper() == "BUY" else "BUY"
-        
+
         order = OrderRequest(
             symbol=symbol,
             side=close_side,

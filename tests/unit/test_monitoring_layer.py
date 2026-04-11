@@ -12,12 +12,8 @@ Mengikuti checklist docs section 14.2.
 
 from __future__ import annotations
 
-import asyncio
 import json
-import tempfile
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -27,11 +23,10 @@ from runtime.agent.models.enums import (
     ComponentStatus,
     HeartbeatStatus,
 )
-from runtime.agent.models.monitoring import Alert, ComponentHealth
+from runtime.agent.models.monitoring import Alert
 from runtime.agent.monitoring.alerts import AlertManager
 from runtime.agent.monitoring.health_check import HealthCheck
 from runtime.agent.monitoring.heartbeat import Heartbeat
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  Helpers
@@ -129,11 +124,16 @@ class TestHeartbeat:
         hb = Heartbeat(data_dir=tmp_dir)
         old_time = datetime.now(UTC) - timedelta(seconds=100)
         hb_file = tmp_dir / "heartbeat.json"
-        hb_file.write_text(json.dumps({
-            "timestamp": old_time.isoformat(),
-            "tasks_ok": True,
-            "status": "alive",
-        }), encoding="utf-8")
+        hb_file.write_text(
+            json.dumps(
+                {
+                    "timestamp": old_time.isoformat(),
+                    "tasks_ok": True,
+                    "status": "alive",
+                }
+            ),
+            encoding="utf-8",
+        )
         assert hb.get_status() == HeartbeatStatus.STALE
 
     def test_status_dead_old_pulse(self, tmp_dir):
@@ -141,11 +141,16 @@ class TestHeartbeat:
         hb = Heartbeat(data_dir=tmp_dir)
         old_time = datetime.now(UTC) - timedelta(seconds=200)
         hb_file = tmp_dir / "heartbeat.json"
-        hb_file.write_text(json.dumps({
-            "timestamp": old_time.isoformat(),
-            "tasks_ok": True,
-            "status": "alive",
-        }), encoding="utf-8")
+        hb_file.write_text(
+            json.dumps(
+                {
+                    "timestamp": old_time.isoformat(),
+                    "tasks_ok": True,
+                    "status": "alive",
+                }
+            ),
+            encoding="utf-8",
+        )
         assert hb.get_status() == HeartbeatStatus.DEAD
 
     def test_status_dead_corrupt_file(self, tmp_dir):
@@ -287,11 +292,14 @@ class TestAlertManager:
         bus = MockEventBus()
         mgr = AlertManager(event_bus=bus)
 
-        await mgr.send(Alert(
-            severity=AlertSeverity.INFO,
-            title="Test", message="Hello",
-            component="test",
-        ))
+        await mgr.send(
+            Alert(
+                severity=AlertSeverity.INFO,
+                title="Test",
+                message="Hello",
+                component="test",
+            )
+        )
 
         assert len(bus.events) == 0  # INFO doesn't emit
         assert len(mgr.get_history()) == 1
@@ -302,11 +310,14 @@ class TestAlertManager:
         bus = MockEventBus()
         mgr = AlertManager(event_bus=bus)
 
-        await mgr.send(Alert(
-            severity=AlertSeverity.WARNING,
-            title="Warn", message="Something",
-            component="test",
-        ))
+        await mgr.send(
+            Alert(
+                severity=AlertSeverity.WARNING,
+                title="Warn",
+                message="Something",
+                component="test",
+            )
+        )
 
         assert len(bus.events) == 1
         assert bus.events[0][0] == "alert_warning"
@@ -318,11 +329,14 @@ class TestAlertManager:
         bus = MockEventBus()
         mgr = AlertManager(event_bus=bus)
 
-        await mgr.send(Alert(
-            severity=AlertSeverity.CRITICAL,
-            title="Fire", message="Everything is burning",
-            component="system",
-        ))
+        await mgr.send(
+            Alert(
+                severity=AlertSeverity.CRITICAL,
+                title="Fire",
+                message="Everything is burning",
+                component="system",
+            )
+        )
 
         assert len(bus.events) == 1
         assert bus.events[0][0] == "alert_critical"
@@ -337,11 +351,14 @@ class TestAlertManager:
         """No EventBus → graceful (log only)."""
         mgr = AlertManager(event_bus=None)
 
-        await mgr.send(Alert(
-            severity=AlertSeverity.CRITICAL,
-            title="Fire", message="Test",
-            component="test",
-        ))
+        await mgr.send(
+            Alert(
+                severity=AlertSeverity.CRITICAL,
+                title="Fire",
+                message="Test",
+                component="test",
+            )
+        )
         assert mgr.critical_count == 1
 
     @pytest.mark.asyncio
@@ -349,11 +366,14 @@ class TestAlertManager:
         """History capped at MAX_ALERT_HISTORY."""
         mgr = AlertManager()
         for i in range(250):
-            await mgr.send(Alert(
-                severity=AlertSeverity.INFO,
-                title=f"Alert {i}", message=f"msg {i}",
-                component="test",
-            ))
+            await mgr.send(
+                Alert(
+                    severity=AlertSeverity.INFO,
+                    title=f"Alert {i}",
+                    message=f"msg {i}",
+                    component="test",
+                )
+            )
         assert len(mgr.get_history(limit=300)) == 200  # capped
 
     @pytest.mark.asyncio
@@ -361,7 +381,9 @@ class TestAlertManager:
         """Template send_circuit_breaker works."""
         mgr = AlertManager()
         await mgr.send_circuit_breaker(
-            state="halted", reasons=["daily loss -5%"], equity=9500.0,
+            state="halted",
+            reasons=["daily loss -5%"],
+            equity=9500.0,
         )
         assert mgr.critical_count == 1
 
@@ -370,8 +392,13 @@ class TestAlertManager:
         """Template send_trade_opened works."""
         mgr = AlertManager()
         await mgr.send_trade_opened(
-            symbol="BTCUSDT", side="BUY", qty=0.001,
-            entry=50000, sl=49000, tp=52000, risk_usd=10,
+            symbol="BTCUSDT",
+            side="BUY",
+            qty=0.001,
+            entry=50000,
+            sl=49000,
+            tp=52000,
+            risk_usd=10,
         )
         assert len(mgr.get_history()) == 1
 
@@ -380,8 +407,11 @@ class TestAlertManager:
         """Template send_trade_closed works."""
         mgr = AlertManager()
         await mgr.send_trade_closed(
-            symbol="BTCUSDT", pnl_usd=150.0, pnl_pct=3.0,
-            exit_reason="tp", hold_candles=12,
+            symbol="BTCUSDT",
+            pnl_usd=150.0,
+            pnl_pct=3.0,
+            exit_reason="tp",
+            hold_candles=12,
         )
         assert len(mgr.get_history()) == 1
 
@@ -390,7 +420,10 @@ class TestAlertManager:
         """Template send_daily_summary works."""
         mgr = AlertManager()
         await mgr.send_daily_summary(
-            total_trades=5, win_rate=0.8, daily_pnl=234.0,
-            equity=10234.0, open_positions=2,
+            total_trades=5,
+            win_rate=0.8,
+            daily_pnl=234.0,
+            equity=10234.0,
+            open_positions=2,
         )
         assert len(mgr.get_history()) == 1

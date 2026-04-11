@@ -37,15 +37,13 @@ class TradeStore:
                 ?, ?, ?, ?
             )
         """
-        
+
         await conn.execute(query, self._to_row(trade))
         await conn.commit()
 
     async def get(self, trade_id: str) -> Trade | None:
         conn = self._db.connection
-        cursor = await conn.execute(
-            "SELECT * FROM active_trades WHERE trade_id = ?", (trade_id,)
-        )
+        cursor = await conn.execute("SELECT * FROM active_trades WHERE trade_id = ?", (trade_id,))
         row = await cursor.fetchone()
         return self._from_row(row) if row else None
 
@@ -78,10 +76,10 @@ class TradeStore:
             TradeStatus.OPEN.value,
             TradeStatus.PARTIAL.value,
         ]
-        
+
         placeholders = ",".join(["?"] * len(active_statuses))
         query = f"SELECT * FROM active_trades WHERE status IN ({placeholders})"
-        
+
         cursor = await conn.execute(query, active_statuses)
         rows = await cursor.fetchall()
         return [self._from_row(r) for r in rows if r]
@@ -132,13 +130,13 @@ class TradeStore:
                 trade.pnl_usd,
                 trade.pnl_pct,
                 trade.commission_usd,
-                trade.exit_reason
+                trade.exit_reason,
             )
             await conn.execute(query_insert, row_data + exit_data)
 
             # 2. Delete dari active_trades
             await conn.execute("DELETE FROM active_trades WHERE trade_id = ?", (trade.trade_id,))
-            
+
             await conn.commit()
         except Exception:
             await conn.rollback()
@@ -149,7 +147,7 @@ class TradeStore:
         return len(trades)
 
     # --- Helpers ---
-    
+
     def _isoformat(self, dt: datetime | None) -> str | None:
         return dt.isoformat() if dt else None
 
@@ -180,13 +178,13 @@ class TradeStore:
             trade.signal_confidence,
             trade.regime_at_entry,
             trade.vol_regime_entry,
-            json.dumps(trade.metadata) if trade.metadata else "{}"
+            json.dumps(trade.metadata) if trade.metadata else "{}",
         )
 
     def _from_row(self, row: aiosqlite.Row | None) -> Trade | None:
         if not row:
             return None
-        
+
         return Trade(
             trade_id=row["trade_id"],
             client_order_id=row["client_order_id"],
@@ -207,11 +205,13 @@ class TradeStore:
             risk_amount_usd=row["risk_amount_usd"],
             leverage=row["leverage"],
             is_futures=bool(row["is_futures"]),
-            submitted_at=datetime.fromisoformat(row["submitted_at"]) if row["submitted_at"] else None,
+            submitted_at=datetime.fromisoformat(row["submitted_at"])
+            if row["submitted_at"]
+            else None,
             opened_at=datetime.fromisoformat(row["opened_at"]) if row["opened_at"] else None,
             updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
             signal_confidence=row["signal_confidence"],
             regime_at_entry=row["regime_at_entry"] or "",
             vol_regime_entry=row["vol_regime_entry"] or "",
-            metadata=json.loads(row["metadata"]) if row["metadata"] else {}
+            metadata=json.loads(row["metadata"]) if row["metadata"] else {},
         )

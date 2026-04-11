@@ -23,7 +23,9 @@ class OrderStatusProvider(Protocol):
     """Interface untuk query status order di exchange."""
 
     async def get_order_status(
-        self, symbol: str, client_order_id: str,
+        self,
+        symbol: str,
+        client_order_id: str,
     ) -> dict:
         """Return dict dengan keys: status, filled_qty, avg_price.
 
@@ -44,9 +46,13 @@ class TradeStore(Protocol):
         ...
 
     def update_trade_status(
-        self, trade_id: str, status: str,
-        filled_qty: float = 0.0, avg_price: float = 0.0,
-    ) -> None: ...
+        self,
+        trade_id: str,
+        status: str,
+        filled_qty: float = 0.0,
+        avg_price: float = 0.0,
+    ) -> None:
+        ...
 
 
 class OrderNotFoundError(Exception):
@@ -81,7 +87,8 @@ class OrderSync:
 
             try:
                 ex_resp = await self._exchange.get_order_status(
-                    symbol, client_order_id,
+                    symbol,
+                    client_order_id,
                 )
             except OrderNotFoundError:
                 conflicts.append(
@@ -96,7 +103,8 @@ class OrderSync:
 
             if ex_status == "FILLED":
                 self._store.update_trade_status(
-                    trade_id, "open",
+                    trade_id,
+                    "open",
                     filled_qty=ex_resp.get("filled_qty", 0.0),
                     avg_price=ex_resp.get("avg_price", 0.0),
                 )
@@ -115,7 +123,8 @@ class OrderSync:
 
             elif ex_status == "PARTIALLY_FILLED":
                 self._store.update_trade_status(
-                    trade_id, "partial",
+                    trade_id,
+                    "partial",
                     filled_qty=ex_resp.get("filled_qty", 0.0),
                     avg_price=ex_resp.get("avg_price", 0.0),
                 )
@@ -132,8 +141,7 @@ class OrderSync:
         self._last_report = report
 
         if conflicts:
-            logger.warning("[OrderSync] %d conflicts: %s",
-                           len(conflicts), conflicts)
+            logger.warning("[OrderSync] %d conflicts: %s", len(conflicts), conflicts)
 
         return report
 

@@ -150,8 +150,7 @@ class StopLossManager:
                 return sl
             except Exception as exc:
                 logger.warning(
-                    f"[StopLoss] align_sl_to_structure gagal: {exc}. "
-                    "Fallback ke ATR/default."
+                    f"[StopLoss] align_sl_to_structure gagal: {exc}. " "Fallback ke ATR/default."
                 )
 
         # Fallback ke ATR atau default persen

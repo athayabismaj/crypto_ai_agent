@@ -40,14 +40,29 @@ class SystemInfoProvider(Protocol):
     Diimplementasi oleh caller yang punya akses ke komponen aktual.
     """
 
-    def get_memory_rss_mb(self) -> float: ...
-    def get_disk_free_gb(self) -> float: ...
-    def get_circuit_breaker_state(self) -> str: ...
-    def get_rate_limit_pct(self) -> float: ...
-    def get_ws_last_message_age_s(self) -> float: ...
-    async def ping_exchange_ms(self) -> float: ...
-    def get_open_orders_count(self) -> int: ...
-    def get_max_positions(self) -> int: ...
+    def get_memory_rss_mb(self) -> float:
+        ...
+
+    def get_disk_free_gb(self) -> float:
+        ...
+
+    def get_circuit_breaker_state(self) -> str:
+        ...
+
+    def get_rate_limit_pct(self) -> float:
+        ...
+
+    def get_ws_last_message_age_s(self) -> float:
+        ...
+
+    async def ping_exchange_ms(self) -> float:
+        ...
+
+    def get_open_orders_count(self) -> int:
+        ...
+
+    def get_max_positions(self) -> int:
+        ...
 
 
 class DefaultSystemInfo:
@@ -56,6 +71,7 @@ class DefaultSystemInfo:
     def get_memory_rss_mb(self) -> float:
         try:
             import psutil  # type: ignore[import-untyped]
+
             process = psutil.Process()
             return process.memory_info().rss / (1024 * 1024)
         except (ImportError, Exception):
@@ -64,6 +80,7 @@ class DefaultSystemInfo:
     def get_disk_free_gb(self) -> float:
         try:
             import shutil
+
             usage = shutil.disk_usage(".")
             return usage.free / (1024**3)
         except Exception:
@@ -131,12 +148,14 @@ class HealthCheck:
         components: list[ComponentHealth] = []
         for check in checks:
             if isinstance(check, Exception):
-                components.append(ComponentHealth(
-                    name="unknown",
-                    status=ComponentStatus.UNHEALTHY,
-                    value="error",
-                    message=str(check),
-                ))
+                components.append(
+                    ComponentHealth(
+                        name="unknown",
+                        status=ComponentStatus.UNHEALTHY,
+                        value="error",
+                        message=str(check),
+                    )
+                )
             elif isinstance(check, ComponentHealth):
                 components.append(check)
 
@@ -171,8 +190,7 @@ class HealthCheck:
 
     # ── Checks ────────────────────────────────────────────────────
 
-    async def _safe_check(self, name: str,
-                          check_fn: object) -> ComponentHealth:
+    async def _safe_check(self, name: str, check_fn: object) -> ComponentHealth:
         """Wrapper: timeout + exception handling."""
         try:
             result = check_fn()  # type: ignore[operator]

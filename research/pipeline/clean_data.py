@@ -85,8 +85,16 @@ def remove_outliers(df: pd.DataFrame, z_thresh: float = 4.0) -> pd.DataFrame:
 def _fill_gaps(df: pd.DataFrame, tf: str, max_ffill: int) -> pd.DataFrame:
     """Isi gap candle kosong dengan forward-fill, max sejumlah max_ffill berturut."""
     tf_map = {
-        "1m": "1min", "3m": "3min", "5m": "5min", "15m": "15min", "30m": "30min",
-        "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "1d": "1D",
+        "1m": "1min",
+        "3m": "3min",
+        "5m": "5min",
+        "15m": "15min",
+        "30m": "30min",
+        "1h": "1h",
+        "2h": "2h",
+        "4h": "4h",
+        "6h": "6h",
+        "1d": "1D",
     }
     freq = tf_map.get(tf)
     if freq is None:
@@ -159,14 +167,18 @@ def clean_ohlcv(
         df = df[df["volume"] >= cfg.min_candle_volume]
         removed = before - len(df)
         if removed > 0:
-            log.info(f"[{symbol}] Menghapus {removed} candle dengan volume < {cfg.min_candle_volume}")
+            log.info(
+                f"[{symbol}] Menghapus {removed} candle dengan volume < {cfg.min_candle_volume}"
+            )
 
     df = df.reset_index(drop=True)
     log.info(f"[{symbol} {tf}] Cleaning selesai: {len(df)} baris.")
     return df
 
 
-def save_processed(df: pd.DataFrame, symbol: str, tf: str, config: CleanConfig | None = None) -> str:
+def save_processed(
+    df: pd.DataFrame, symbol: str, tf: str, config: CleanConfig | None = None
+) -> str:
     """Simpan data bersih ke processed dir."""
     import os
 

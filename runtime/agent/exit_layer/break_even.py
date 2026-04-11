@@ -76,7 +76,10 @@ class BreakEvenManager:
             self._activated.add(trade_id)
             logger.info(
                 "[BreakEven] Activated %s: profit %.1fR >= %.1fR, new SL=%.2f",
-                trade_id, profit_r, self.trigger_r, be_price,
+                trade_id,
+                profit_r,
+                self.trigger_r,
+                be_price,
             )
             return ExitDecision(
                 action=ExitAction.UPDATE_SL,

@@ -6,10 +6,9 @@ ATURAN: Signal candle T di-fill pada open candle T+1 (lookahead protection).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol
 
-import numpy as np
 import pandas as pd
 
 log = logging.getLogger(__name__)
@@ -18,20 +17,20 @@ log = logging.getLogger(__name__)
 @dataclass
 class BacktestConfig:
     initial_capital: float = 10_000.0
-    commission_pct: float = 0.001          # 0.1% taker fee Binance
-    slippage_pct: float = 0.0005           # 0.05% slippage default
-    execution_delay: int = 1               # candle delay sebelum fill
-    max_position_pct: float = 0.10         # max 10% equity per posisi
+    commission_pct: float = 0.001  # 0.1% taker fee Binance
+    slippage_pct: float = 0.0005  # 0.05% slippage default
+    execution_delay: int = 1  # candle delay sebelum fill
+    max_position_pct: float = 0.10  # max 10% equity per posisi
     allow_short: bool = False
     sl_atr_multiplier: float = 2.0
     tp_atr_multiplier: float = 3.0
     trailing_activation_pct: float = 0.03  # 3% profit → activate trailing
-    trailing_callback_pct: float = 0.015   # 1.5% pullback → close
+    trailing_callback_pct: float = 0.015  # 1.5% pullback → close
 
 
 @dataclass
 class Signal:
-    direction: str     # "BUY" | "SELL"
+    direction: str  # "BUY" | "SELL"
     confidence: float  # 0.0 - 1.0
     sl_price: float = 0.0
     tp_price: float = 0.0
@@ -41,7 +40,7 @@ class Signal:
 class Position:
     entry_price: float
     qty: float
-    side: str          # "LONG" | "SHORT"
+    side: str  # "LONG" | "SHORT"
     sl_price: float
     tp_price: float
     entry_bar: int
@@ -74,9 +73,9 @@ class BacktestResult:
 
 class StrategyProtocol(Protocol):
     """Kontrak minimal yang harus dipenuhi oleh strategy."""
-    def on_candle(
-        self, candle: dict, position: Position | None, equity: float
-    ) -> Signal | None: ...
+
+    def on_candle(self, candle: dict, position: Position | None, equity: float) -> Signal | None:
+        ...
 
 
 class BacktestEngine:
@@ -135,9 +134,7 @@ class BacktestEngine:
             # ── STEP 2: Fill pending signal dari candle sebelumnya ──
             if pending_signal is not None and position is None:
                 fill_price = candle["open"] * (1 + self.cfg.slippage_pct)
-                position = self._open_position(
-                    pending_signal, fill_price, i, equity
-                )
+                position = self._open_position(pending_signal, fill_price, i, equity)
                 pending_signal = None
 
             # ── STEP 3: Generate signal untuk candle INI ──
@@ -147,7 +144,7 @@ class BacktestEngine:
                 score = predict_fn(features) if features else 0.0
                 if score > 0.05 and position is None:
                     # Hitung SL/TP berbasis ATR jika tersedia
-                    atr = row.get(f"atr_14", candle["close"] * 0.02)
+                    atr = row.get("atr_14", candle["close"] * 0.02)
                     pending_signal = Signal(
                         direction="BUY",
                         confidence=min(abs(score), 1.0),
@@ -155,7 +152,7 @@ class BacktestEngine:
                         tp_price=candle["close"] + atr * self.cfg.tp_atr_multiplier,
                     )
                 elif score < -0.05 and position is None and self.cfg.allow_short:
-                    atr = row.get(f"atr_14", candle["close"] * 0.02)
+                    atr = row.get("atr_14", candle["close"] * 0.02)
                     pending_signal = Signal(
                         direction="SELL",
                         confidence=min(abs(score), 1.0),
@@ -177,9 +174,7 @@ class BacktestEngine:
         # Close any remaining position at last close
         if position is not None:
             last = df.iloc[-1]
-            trade = self._close_position(
-                position, last["close"], n - 1, "end_of_data", equity
-            )
+            trade = self._close_position(position, last["close"], n - 1, "end_of_data", equity)
             trades.append(trade)
             equity += trade.pnl - trade.commission
 
@@ -214,9 +209,7 @@ class BacktestEngine:
             peak_price=fill_price,
         )
 
-    def _check_exit(
-        self, pos: Position, candle: dict
-    ) -> tuple[str, float]:
+    def _check_exit(self, pos: Position, candle: dict) -> tuple[str, float]:
         """Cek apakah posisi harus ditutup."""
         high, low = candle["high"], candle["low"]
 

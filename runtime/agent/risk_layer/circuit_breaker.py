@@ -157,9 +157,7 @@ class CircuitBreaker:
     def record_loss(self) -> None:
         """Dipanggil setelah setiap trade yang merugi."""
         self._consecutive_losses += 1
-        logger.debug(
-            f"[CircuitBreaker] Loss recorded. Consecutive={self._consecutive_losses}"
-        )
+        logger.debug(f"[CircuitBreaker] Loss recorded. Consecutive={self._consecutive_losses}")
 
     def record_win(self) -> None:
         """Reset consecutive loss counter setelah win."""

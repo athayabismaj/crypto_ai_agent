@@ -23,15 +23,15 @@ class LearningDBManager:
     async def connect(self) -> None:
         """Koneksi dan inisiasi skema awal jika dibutuhkan."""
         os.makedirs(self.data_dir, exist_ok=True)
-        
+
         self.exp_conn = await aiosqlite.connect(self.exp_db_path)
         self.exp_conn.row_factory = aiosqlite.Row
         await self.exp_conn.execute("PRAGMA journal_mode=WAL;")
-        
+
         self.perf_conn = await aiosqlite.connect(self.perf_db_path)
         self.perf_conn.row_factory = aiosqlite.Row
         await self.perf_conn.execute("PRAGMA journal_mode=WAL;")
-        
+
         await self._init_schema()
 
     async def disconnect(self) -> None:

@@ -4,7 +4,6 @@ Menulis log dalam format JSON satu baris per entry untuk Prometheus/Grafana.
 """
 
 import json
-import logging
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from typing import Any
@@ -15,6 +14,7 @@ from runtime.shared.utils.time_utils import utcnow
 # Konfigurasi via file Config, tapi fallback hardcoded untuk sementara
 LOG_FORMAT = "json"  # json | text
 
+
 class StructuredLogger(AgentLogger):
     def __init__(self, name: str, ctx: dict[str, Any] = None):
         super().__init__(name, ctx)
@@ -22,7 +22,7 @@ class StructuredLogger(AgentLogger):
 
     def _serialize(self, msg: str, level: str, **ctx: Any) -> str:
         ctx_all = {**self._ctx, **ctx}
-        
+
         # Serialize specific types safely
         for k, v in list(ctx_all.items()):
             if isinstance(v, datetime):
@@ -44,14 +44,14 @@ class StructuredLogger(AgentLogger):
             "logger": self._logger.name,
             "message": msg,
             "mode": self._mode,
-            **ctx_all
+            **ctx_all,
         }
-        
+
         if LOG_FORMAT == "json":
             try:
                 return json.dumps(record)
             except Exception:
-                return super()._format(msg, ctx) # fallback ke format txt
+                return super()._format(msg, ctx)  # fallback ke format txt
         else:
             return super()._format(msg, ctx)
 
@@ -70,12 +70,14 @@ class StructuredLogger(AgentLogger):
     def critical(self, msg: str, **ctx: Any) -> None:
         self._logger.critical(self._serialize(msg, "CRITICAL", **ctx))
 
-    def bind(self, **ctx: Any) -> 'StructuredLogger':
+    def bind(self, **ctx: Any) -> "StructuredLogger":
         new_ctx = {**self._ctx, **ctx}
         return StructuredLogger(self._logger.name, new_ctx)
 
+
 # Global register for structured logger as well
 _structured_loggers: dict[str, StructuredLogger] = {}
+
 
 def get_structured_logger(name: str) -> StructuredLogger:
     if name not in _structured_loggers:

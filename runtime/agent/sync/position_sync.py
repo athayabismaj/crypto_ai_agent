@@ -85,13 +85,15 @@ class PositionSync:
         # ── Ghost positions: ada di exchange, tidak di internal ──
         for symbol, ex_pos in exchange_positions.items():
             if symbol not in internal_positions:
-                discrepancies.append(Discrepancy(
-                    type="GHOST_POSITION",
-                    symbol=symbol,
-                    internal=None,
-                    exchange=ex_pos,
-                    severity="CRITICAL",
-                ))
+                discrepancies.append(
+                    Discrepancy(
+                        type="GHOST_POSITION",
+                        symbol=symbol,
+                        internal=None,
+                        exchange=ex_pos,
+                        severity="CRITICAL",
+                    )
+                )
                 logger.critical(
                     "[PositionSync] GHOST POSITION: %s ada di exchange tapi tidak di internal!",
                     symbol,
@@ -100,13 +102,15 @@ class PositionSync:
         # ── Zombie positions: ada di internal, tidak di exchange ──
         for symbol, int_pos in internal_positions.items():
             if symbol not in exchange_positions:
-                discrepancies.append(Discrepancy(
-                    type="ZOMBIE_POSITION",
-                    symbol=symbol,
-                    internal=int_pos,
-                    exchange=None,
-                    severity="HIGH",
-                ))
+                discrepancies.append(
+                    Discrepancy(
+                        type="ZOMBIE_POSITION",
+                        symbol=symbol,
+                        internal=int_pos,
+                        exchange=None,
+                        severity="HIGH",
+                    )
+                )
                 # Mark sebagai closed
                 trade_id = int_pos.get("trade_id", "")
                 if trade_id:
@@ -122,16 +126,20 @@ class PositionSync:
             ex_qty = exchange_positions[symbol].get("qty", 0.0)
 
             if abs(int_qty - ex_qty) / max(int_qty, 1e-8) > QTY_TOLERANCE_PCT:
-                discrepancies.append(Discrepancy(
-                    type="QTY_MISMATCH",
-                    symbol=symbol,
-                    internal=internal_positions[symbol],
-                    exchange=exchange_positions[symbol],
-                    severity="MEDIUM",
-                ))
+                discrepancies.append(
+                    Discrepancy(
+                        type="QTY_MISMATCH",
+                        symbol=symbol,
+                        internal=internal_positions[symbol],
+                        exchange=exchange_positions[symbol],
+                        severity="MEDIUM",
+                    )
+                )
                 logger.warning(
                     "[PositionSync] QTY MISMATCH %s: internal=%.6f, exchange=%.6f",
-                    symbol, int_qty, ex_qty,
+                    symbol,
+                    int_qty,
+                    ex_qty,
                 )
 
         # ── Handle discrepancies ──────────────────────────────────
@@ -163,23 +171,27 @@ class PositionSync:
             critical = [d for d in discrepancies if d.severity == "CRITICAL"]
             if critical:
                 symbols = ", ".join(d.symbol for d in critical)
-                await send(Alert(
-                    severity=AlertSeverity.CRITICAL,
-                    title="Position discrepancy detected",
-                    message=f"Ghost positions: {symbols}",
-                    component="position_sync",
-                    data={"discrepancies": len(discrepancies)},
-                ))
+                await send(
+                    Alert(
+                        severity=AlertSeverity.CRITICAL,
+                        title="Position discrepancy detected",
+                        message=f"Ghost positions: {symbols}",
+                        component="position_sync",
+                        data={"discrepancies": len(discrepancies)},
+                    )
+                )
 
             high = [d for d in discrepancies if d.severity == "HIGH"]
             if high:
                 symbols = ", ".join(d.symbol for d in high)
-                await send(Alert(
-                    severity=AlertSeverity.WARNING,
-                    title="Zombie positions detected",
-                    message=f"Internal-only positions: {symbols}",
-                    component="position_sync",
-                    data={"discrepancies": len(high)},
-                ))
+                await send(
+                    Alert(
+                        severity=AlertSeverity.WARNING,
+                        title="Zombie positions detected",
+                        message=f"Internal-only positions: {symbols}",
+                        component="position_sync",
+                        data={"discrepancies": len(high)},
+                    )
+                )
         except Exception:
             logger.debug("[PositionSync] Failed to send alerts")

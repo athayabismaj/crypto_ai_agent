@@ -13,7 +13,6 @@ dan menangani 4 tabel utama:
 from __future__ import annotations
 
 import logging
-import sqlite3
 from pathlib import Path
 
 import aiosqlite
@@ -67,7 +66,8 @@ class DatabaseManager:
             return
 
         # 1. Tabel active_trades (state.db)
-        await self._conn.execute("""
+        await self._conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS active_trades (
                 trade_id TEXT PRIMARY KEY,
                 client_order_id TEXT UNIQUE NOT NULL,
@@ -96,11 +96,13 @@ class DatabaseManager:
                 vol_regime_entry TEXT,
                 metadata TEXT
             )
-        """)
+        """
+        )
 
         # 2. Tabel archived_trades (experience.db)
         # Struktur sama dengan active_trades tapi ditambah exit info
-        await self._conn.execute("""
+        await self._conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS archived_trades (
                 trade_id TEXT PRIMARY KEY,
                 client_order_id TEXT UNIQUE NOT NULL,
@@ -136,20 +138,24 @@ class DatabaseManager:
                 commission_usd REAL NOT NULL,
                 exit_reason TEXT
             )
-        """)
+        """
+        )
 
         # 3. Tabel idempotency_registry
-        await self._conn.execute("""
+        await self._conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS idempotency_registry (
                 client_order_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP
             )
-        """)
+        """
+        )
 
         # 4. Tabel audit_events
-        await self._conn.execute("""
+        await self._conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS audit_events (
                 event_id TEXT PRIMARY KEY,
                 trade_id TEXT NOT NULL,
@@ -160,7 +166,8 @@ class DatabaseManager:
                 details TEXT,
                 checksum TEXT NOT NULL
             )
-        """)
+        """
+        )
 
         # Index untuk pencarian cepat
         await self._conn.execute(
@@ -172,5 +179,5 @@ class DatabaseManager:
         await self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_archive_symbol ON archived_trades(symbol)"
         )
-        
+
         await self._conn.commit()

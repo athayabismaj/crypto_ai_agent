@@ -139,7 +139,9 @@ class TradeManager:
                 # Kita anggap event method adalah async di fase lanjut
                 # atau synchronous depending on event_bus implementation.
                 if __import__("inspect").iscoroutinefunction(getattr(self._event_bus, "publish")):
-                    await getattr(self._event_bus, "publish")("TRADE_OPENED", trade, "trade_manager")
+                    await getattr(self._event_bus, "publish")(
+                        "TRADE_OPENED", trade, "trade_manager"
+                    )
                 else:
                     getattr(self._event_bus, "publish")("TRADE_OPENED", trade, "trade_manager")
 
@@ -212,7 +214,9 @@ class TradeManager:
         if trade.notional > 0:
             trade.pnl_pct = (pnl_usd / trade.notional) * 100
 
-        await self._store.archive(trade)  # Archiving langsung save sekaligus hapus dari active pke transaction
+        await self._store.archive(
+            trade
+        )  # Archiving langsung save sekaligus hapus dari active pke transaction
 
         await self._audit.record(
             trade,
@@ -241,10 +245,7 @@ class TradeManager:
         trade.sl_price = new_sl
         await self._store.save(trade)
         await self._audit.record(
-            trade,
-            "SL_UPDATED",
-            actor=actor,
-            details={"old_sl": old_sl, "new_sl": new_sl}
+            trade, "SL_UPDATED", actor=actor, details={"old_sl": old_sl, "new_sl": new_sl}
         )
         log.info(f"Trade [{trade.trade_id}] SL updated: {old_sl} -> {new_sl}")
         return trade

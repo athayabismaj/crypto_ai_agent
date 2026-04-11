@@ -7,12 +7,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +30,7 @@ class ModelMetadata:
     feature_names: list[str]
     feature_count: int
     metrics: dict[str, float]
-    status: str = "candidate"   # candidate → validated → production → deprecated → archived → failed
+    status: str = "candidate"  # candidate → validated → production → deprecated → archived → failed
     replaces: str = ""
     pkl_path: str = ""
 
@@ -88,10 +85,7 @@ class ModelRegistry:
 
         valid_next = VALID_TRANSITIONS.get(meta.status, [])
         if new_status not in valid_next:
-            log.error(
-                f"Transisi tidak sah: {meta.status} → {new_status}. "
-                f"Valid: {valid_next}"
-            )
+            log.error(f"Transisi tidak sah: {meta.status} → {new_status}. " f"Valid: {valid_next}")
             return False
 
         meta.status = new_status

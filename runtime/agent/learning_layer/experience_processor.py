@@ -6,7 +6,6 @@ Berjalan harian UTC 01:00 setelah reconciliation.
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 from runtime.agent.learning_layer.learning_db import LearningDBManager
 from runtime.shared.utils import utcnow  # type: ignore
@@ -74,7 +73,7 @@ class ExperienceProcessor:
             for period_label, days in periods.items():
                 stats = await self._compute_stats_for(strategy_id, period_label, days)
                 results[strategy_id][period_label] = stats
-                
+
                 # Simpan ke DB Performance
                 await self._db.perf_conn.execute(
                     """
@@ -104,7 +103,7 @@ class ExperienceProcessor:
         from datetime import timedelta
 
         cutoff = (utcnow() - timedelta(days=days)).isoformat()
-        
+
         query = "SELECT * FROM closed_trades WHERE strategy_id = ?"
         params = [strategy_id]
         if days != 9999:
@@ -126,7 +125,7 @@ class ExperienceProcessor:
 
         consec_wins, consec_loss = 0, 0
         max_c_wins, max_c_loss = 0, 0
-        
+
         peak_pnl = 0.0
         max_dd = 0.0
         running_pnl = 0.0
@@ -188,18 +187,20 @@ class ExperienceProcessor:
 
         win_rate = wins / total
         profit_factor = gross_profit / max(1.0, gross_loss)
-        
+
         best_regime, worst_regime = "unknown", "unknown"
         if regime_perf:
-            # Sort by win rate, min 3 trades 
-            valid_regimes = {k: v["wins"] / v["count"] for k, v in regime_perf.items() if v["count"] >= 3}
+            # Sort by win rate, min 3 trades
+            valid_regimes = {
+                k: v["wins"] / v["count"] for k, v in regime_perf.items() if v["count"] >= 3
+            }
             if valid_regimes:
-                best_regime = max(valid_regimes, key=valid_regimes.get) # type: ignore
-                worst_regime = min(valid_regimes, key=valid_regimes.get) # type: ignore
+                best_regime = max(valid_regimes, key=valid_regimes.get)  # type: ignore
+                worst_regime = min(valid_regimes, key=valid_regimes.get)  # type: ignore
 
         # Dummy Sharpe ratio (simplified - daily returns needed for real Sharpe)
         # Using a proxy here
-        sharpe = (total_pnl / max(1.0, max_dd)) * 0.1 
+        sharpe = (total_pnl / max(1.0, max_dd)) * 0.1
 
         return StrategyStats(
             strategy_id=strategy_id,
@@ -215,7 +216,7 @@ class ExperienceProcessor:
             avg_risk_reward=0.0,  # Requires original TP/SL
             max_consecutive_wins=max_c_wins,
             max_consecutive_losses=max_c_loss,
-            max_drawdown_pct=max_dd, 
+            max_drawdown_pct=max_dd,
             sharpe_ratio=sharpe,
             sortino_ratio=sharpe * 1.5,
             avg_hold_candles=total_hold / total,
@@ -255,16 +256,16 @@ class ExperienceProcessor:
         assert self._db.perf_conn is not None
         cursor = await self._db.perf_conn.execute(
             "SELECT * FROM strategy_stats WHERE strategy_id = ? AND period = ?",
-            (strategy_id, period)
+            (strategy_id, period),
         )
         row = await cursor.fetchone()
         if not row:
             return None
-            
-        # Untuk simple fetch, kita buat instance dari row db 
+
+        # Untuk simple fetch, kita buat instance dari row db
         # (Idealnya ada deserializer komplit)
-        return self._empty_stats(strategy_id, period) # Mock return jika tak lengkap
-        
+        return self._empty_stats(strategy_id, period)  # Mock return jika tak lengkap
+
     async def get_confidence_bins(self, strategy_id: str) -> list[ConfidenceBin]:
         """
         Bagi histori trade ke bin confidence.
@@ -273,10 +274,10 @@ class ExperienceProcessor:
         assert self._db.exp_conn is not None
         cursor = await self._db.exp_conn.execute(
             "SELECT confidence_at_entry, pnl_usd FROM closed_trades WHERE strategy_id = ?",
-            (strategy_id,)
+            (strategy_id,),
         )
         trades = await cursor.fetchall()
-        
+
         bins = [
             ConfidenceBin("[0.0-0.5)", 0.0, 0.5, 0, 0.0, 0.0),
             ConfidenceBin("[0.5-0.6)", 0.5, 0.6, 0, 0.0, 0.0),
@@ -284,13 +285,13 @@ class ExperienceProcessor:
             ConfidenceBin("[0.7-0.8)", 0.7, 0.8, 0, 0.0, 0.0),
             ConfidenceBin("[0.8-1.0]", 0.8, 1.01, 0, 0.0, 0.0),
         ]
-        
+
         # Aggregate
         agg = {b.label: {"wins": 0, "count": 0, "pnl": 0.0} for b in bins}
         for tr in trades:
             conf = tr["confidence_at_entry"]
             pnl = tr["pnl_usd"]
-            
+
             for b in bins:
                 if b.min_val <= conf < b.max_val:
                     agg[b.label]["count"] += 1
@@ -298,12 +299,12 @@ class ExperienceProcessor:
                     if pnl > 0:
                         agg[b.label]["wins"] += 1
                     break
-                    
+
         for b in bins:
             count = agg[b.label]["count"]
             b.trades_count = count
             if count > 0:
                 b.win_rate = agg[b.label]["wins"] / count
                 b.avg_pnl = agg[b.label]["pnl"] / count
-                
+
         return bins

@@ -11,7 +11,6 @@ import logging
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 log = logging.getLogger(__name__)
 
@@ -119,9 +118,7 @@ def check_index_alignment(
     Mis-alignment = silent leakage.
     """
     if len(features) != len(target):
-        log.error(
-            f"Index misalignment: features={len(features)}, target={len(target)}"
-        )
+        log.error(f"Index misalignment: features={len(features)}, target={len(target)}")
         return False
 
     if hasattr(features.index, "equals") and hasattr(target.index, "equals"):

@@ -30,16 +30,35 @@ logger = logging.getLogger(__name__)
 class ReconciliationDataProvider(Protocol):
     """Interface untuk mengumpulkan data rekonsiliasi."""
 
-    async def get_exchange_balance(self) -> float: ...
-    def get_internal_equity(self) -> float: ...
-    def get_internal_open_count(self) -> int: ...
-    async def get_exchange_open_count(self) -> int: ...
-    def get_daily_pnl_internal(self) -> float: ...
-    async def get_daily_pnl_computed(self) -> float: ...
-    def get_total_commission_today(self) -> float: ...
-    def get_total_trades_today(self) -> int: ...
-    def get_win_rate_today(self) -> float: ...
-    async def get_position_discrepancies(self) -> list[Discrepancy]: ...
+    async def get_exchange_balance(self) -> float:
+        ...
+
+    def get_internal_equity(self) -> float:
+        ...
+
+    def get_internal_open_count(self) -> int:
+        ...
+
+    async def get_exchange_open_count(self) -> int:
+        ...
+
+    def get_daily_pnl_internal(self) -> float:
+        ...
+
+    async def get_daily_pnl_computed(self) -> float:
+        ...
+
+    def get_total_commission_today(self) -> float:
+        ...
+
+    def get_total_trades_today(self) -> int:
+        ...
+
+    def get_win_rate_today(self) -> float:
+        ...
+
+    async def get_position_discrepancies(self) -> list[Discrepancy]:
+        ...
 
 
 class Reconciliation:
@@ -71,10 +90,7 @@ class Reconciliation:
         try:
             balance_internal = self._provider.get_internal_equity()
             balance_exchange = await self._provider.get_exchange_balance()
-            balance_drift = (
-                abs(balance_internal - balance_exchange) /
-                max(balance_internal, 1.0)
-            )
+            balance_drift = abs(balance_internal - balance_exchange) / max(balance_internal, 1.0)
             if balance_drift > 0.01:  # 1%
                 issues.append(
                     f"Balance drift {balance_drift:.1%}: "
@@ -92,9 +108,7 @@ class Reconciliation:
             open_exchange = await self._provider.get_exchange_open_count()
             position_discrepancies = await self._provider.get_position_discrepancies()
             if position_discrepancies:
-                issues.append(
-                    f"{len(position_discrepancies)} position discrepancies found"
-                )
+                issues.append(f"{len(position_discrepancies)} position discrepancies found")
         except Exception as e:
             open_internal = 0
             open_exchange = 0
@@ -159,7 +173,10 @@ class Reconciliation:
         self._last_report = report
         logger.info(
             "[Reconciliation] %s: all_ok=%s, issues=%d, duration=%.1fs",
-            date_str, report.all_ok, len(issues), duration_s,
+            date_str,
+            report.all_ok,
+            len(issues),
+            duration_s,
         )
 
         return report
@@ -205,16 +222,18 @@ class Reconciliation:
         try:
             send = getattr(self._alerts, "send", None)
             if send:
-                await send(Alert(
-                    severity=AlertSeverity.WARNING,
-                    title=f"Rekonsiliasi {report.date}: ada isu",
-                    message="\n".join(report.issues),
-                    component="reconciliation",
-                    data={
-                        "date": report.date,
-                        "issues": len(report.issues),
-                        "warnings": len(report.warnings),
-                    },
-                ))
+                await send(
+                    Alert(
+                        severity=AlertSeverity.WARNING,
+                        title=f"Rekonsiliasi {report.date}: ada isu",
+                        message="\n".join(report.issues),
+                        component="reconciliation",
+                        data={
+                            "date": report.date,
+                            "issues": len(report.issues),
+                            "warnings": len(report.warnings),
+                        },
+                    )
+                )
         except Exception:
             logger.debug("[Reconciliation] Failed to send alert")

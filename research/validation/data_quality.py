@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-import numpy as np
 import pandas as pd
 
 log = logging.getLogger(__name__)
@@ -63,8 +62,16 @@ def check_price_range(df: pd.DataFrame, symbol: str) -> tuple[bool, list[str]]:
 def check_candle_gaps(df: pd.DataFrame, tf: str) -> list:
     """Deteksi gap (timestamp melompat lebih dari 1 candle)."""
     tf_seconds = {
-        "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800,
-        "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "1d": 86400,
+        "1m": 60,
+        "3m": 180,
+        "5m": 300,
+        "15m": 900,
+        "30m": 1800,
+        "1h": 3600,
+        "2h": 7200,
+        "4h": 14400,
+        "6h": 21600,
+        "1d": 86400,
     }
     expected_delta = pd.Timedelta(seconds=tf_seconds.get(tf, 3600))
 

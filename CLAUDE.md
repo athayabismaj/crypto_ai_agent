@@ -1,18 +1,18 @@
 # crypto_ai_agent — Universal Agent Rules
-# Versi: 1.0
-# Dibaca oleh: Claude Code, Antigravity, Codex, dan tool lainnya
+# Version: 1.0
+# Read by: Claude Code, Antigravity, Codex, and other tools
 
-## BACA INI PERTAMA KALI
-Sebelum melakukan apapun, baca:
-1. docs/dev_workflow_tech_stack.md  ← urutan pembangunan
-2. Dokumen layer yang relevan di docs/
+## READ THIS FIRST
+Before making any changes, you MUST read:
+1. docs/dev_workflow_tech_stack.md  ← construction sequence
+2. Relevant layer documentation inside docs/
 
-## Proyek
-AI trading agent untuk Binance Spot + Futures.
-Bahasa: Python 3.11 | Async: asyncio | Mode: Paper → Shadow → Live
+## Project
+AI trading agent for Binance Spot + Futures.
+Language: Python 3.11 | Async: asyncio | Modes: Paper → Shadow → Live
 
-## Arsitektur — Urutan Layer
-Layer dibangun dari bawah ke atas. Jangan loncat:
+## Architecture — Layer Sequence
+Layers are built from the bottom up. Do not skip layers:
 1.  utils/              → helpers, time_utils, logger
 2.  security/           → key_manager, encryptor
 3.  core/               → config, event_bus, scheduler, safe_mode, main
@@ -30,34 +30,34 @@ Layer dibangun dari bawah ke atas. Jangan loncat:
 15. learning_layer/     → experience_processor, drift_detection, reflection, adaptation
 16. llm_layer/          → llm_client, llm_budget, trade_analyzer, llm_filter
 
-## Aturan Koding — TIDAK BOLEH DILANGGAR
-1. TIDAK ada datetime.utcnow() langsung
-   → WAJIB pakai utils/time_utils.utcnow()
+## Strict Coding Rules — DO NOT VIOLATE
+1. NO direct `datetime.utcnow()`
+   → MUST use `utils/time_utils.utcnow()`
 
-2. round_qty() WAJIB pakai math.floor bukan round()
-   → Alasan: hindari over-order di exchange
+2. `round_qty()` MUST use `math.floor` instead of `round()`
+   → Reason: Prevent over-ordering rejections at the exchange
 
-3. TIDAK ada I/O (network, DB, file) di dalam:
+3. NO I/O (network, DB, file) in the following layers:
    → strategy_layer/, intelligence_layer/, exit_layer/
-   → Layer ini harus pure computation
+   → These layers must be strictly pure computation
 
-4. Paper mode TIDAK boleh kirim order ke exchange nyata
-   → Cek: if config.mode == 'paper': return self._simulate_fill()
+4. Paper mode MUST NEVER send orders to the live exchange
+   → Guard check: `if config.mode == 'paper': return self._simulate_fill()`
 
-5. SETIAP file baru WAJIB ada unit test pasangannya
-   → runtime/agent/X/file.py → tests/unit/test_X_file.py
+5. EVERY new file MUST have a corresponding unit test
+   → `runtime/agent/X/file.py` → `tests/unit/test_X_file.py`
 
-6. Idempotency WAJIB atomic
-   → Gunakan INSERT OR IGNORE di SQLite
+6. Idempotency MUST be atomic
+   → Use `INSERT OR IGNORE` in SQLite operations
 
-7. Audit trail TIDAK boleh diupdate atau dihapus
-   → Hanya INSERT, tidak ada UPDATE atau DELETE
+7. Audit trails MUST NOT be updated or deleted
+   → INSERT operations only, absolutely NO UPDATE or DELETE
 
-8. Risk layer adalah satu-satunya pintu ke execution
-   → Tidak ada order dikirim tanpa melewati RiskManager.evaluate()
+8. Risk layer is the SOLE gateway to execution
+   → No order can be dispatched without passing through `RiskManager.evaluate()`
 
-## Dokumen Referensi per Layer
-Sebelum implement layer apapun, baca dokumen ini:
+## Reference Documentation per Layer
+Before implementing any layer, strictly read these docs:
 - utils, notification, models → docs/notification_utils_models_docs.md
 - core (main, config, modes)  → docs/agent_core_docs.md
 - data + intelligence         → docs/data_intelligence_docs.md
@@ -67,18 +67,18 @@ Sebelum implement layer apapun, baca dokumen ini:
 - exit + monitoring + sync    → docs/exit_monitoring_sync_docs.md
 - learning + llm              → docs/learning_llm_docs.md
 - tests                       → docs/tests_layer_docs.md
-- tech stack & urutan         → docs/dev_workflow_tech_stack.md
+- tech stack & order          → docs/dev_workflow_tech_stack.md
 
 ## Coverage Requirements
-- risk_layer/         → 100% (wajib mutlak)
-- trade_layer/        → 100% (idempotency & recovery)
-- exit_layer/         → 100% (SL/TP harus presisi)
+- risk_layer/         → 100% (Strictly mandatory)
+- trade_layer/        → 100% (Idempotency & recovery critical)
+- exit_layer/         → 100% (SL/TP must be precise)
 - execution_layer/    → 95%
 - strategy_layer/     → 90%
 - utils/              → 95%
-- semua layer lain    → minimal 85%
+- all other layers    → minimum 85%
 
-## Status Layer (update saat layer selesai)
+## Layer Status (update when a layer is completed)
 - [x] utils/
 - [x] security/
 - [x] core/
@@ -97,7 +97,7 @@ Sebelum implement layer apapun, baca dokumen ini:
 - [x] learning_layer/
 - [x] llm_layer/
 
-## Cara Menandai Layer Selesai
-Setelah layer lulus semua test:
-1. Ubah [ ] menjadi [x] di Status Layer di atas
-2. Jalankan: git commit -m "feat(layer): complete implementation"
+## How to Mark a Layer Complete
+Once a layer passes all unit tests:
+1. Change `[ ]` to `[x]` in the Layer Status section above.
+2. Run: `git commit -m "feat(layer_name): complete implementation"`

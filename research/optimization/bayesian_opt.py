@@ -57,16 +57,21 @@ def run_bayesian_optimization(
                 ptype = spec.get("type", "float")
                 if ptype == "float":
                     params[name] = trial.suggest_float(
-                        name, spec["low"], spec["high"],
+                        name,
+                        spec["low"],
+                        spec["high"],
                         log=spec.get("log", False),
                     )
                 elif ptype == "int":
                     params[name] = trial.suggest_int(
-                        name, spec["low"], spec["high"],
+                        name,
+                        spec["low"],
+                        spec["high"],
                     )
                 elif ptype == "categorical":
                     params[name] = trial.suggest_categorical(
-                        name, spec["choices"],
+                        name,
+                        spec["choices"],
                     )
                 else:
                     params[name] = spec.get("default", 0)
@@ -102,11 +107,13 @@ def run_bayesian_optimization(
 
     all_trials = []
     for trial in study.trials:
-        all_trials.append({
-            "params": trial.params,
-            "score": trial.value if trial.value is not None else float("-inf"),
-            "state": str(trial.state),
-        })
+        all_trials.append(
+            {
+                "params": trial.params,
+                "score": trial.value if trial.value is not None else float("-inf"),
+                "state": str(trial.state),
+            }
+        )
 
     best = study.best_trial
     log.info(

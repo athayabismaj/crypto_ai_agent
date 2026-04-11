@@ -9,6 +9,7 @@ from typing import Any
 
 class AgentLogger:
     """Wrapper standard logger agar bisa bind context."""
+
     def __init__(self, name: str, ctx: dict[str, Any] = None):
         self._logger = logging.getLogger(name)
         self._ctx = ctx or {}
@@ -35,12 +36,14 @@ class AgentLogger:
     def critical(self, msg: str, **ctx: Any) -> None:
         self._logger.critical(self._format(msg, ctx))
 
-    def bind(self, **ctx: Any) -> 'AgentLogger':
+    def bind(self, **ctx: Any) -> "AgentLogger":
         new_ctx = {**self._ctx, **ctx}
         return AgentLogger(self._logger.name, new_ctx)
 
+
 # Gunakan global dict untuk tidak instance multiple logger jika sama
 _loggers: dict[str, AgentLogger] = {}
+
 
 def get_logger(name: str) -> AgentLogger:
     if name not in _loggers:

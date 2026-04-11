@@ -12,7 +12,6 @@ AlertManager pakai EventBus sebagai transport sementara.
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import logging
 import sys
@@ -53,19 +52,16 @@ class AlertManager:
 
         # Routing berdasarkan severity
         if alert.severity == AlertSeverity.INFO:
-            logger.info("[Alert] %s: %s — %s",
-                        alert.component, alert.title, alert.message)
+            logger.info("[Alert] %s: %s — %s", alert.component, alert.title, alert.message)
 
         elif alert.severity == AlertSeverity.WARNING:
             self._warning_count += 1
-            logger.warning("[Alert] ⚠  %s: %s — %s",
-                           alert.component, alert.title, alert.message)
+            logger.warning("[Alert] ⚠  %s: %s — %s", alert.component, alert.title, alert.message)
             await self._emit_event("alert_warning", alert)
 
         elif alert.severity == AlertSeverity.CRITICAL:
             self._critical_count += 1
-            logger.critical("[Alert] 🚨 %s: %s — %s",
-                            alert.component, alert.title, alert.message)
+            logger.critical("[Alert] 🚨 %s: %s — %s", alert.component, alert.title, alert.message)
             # Stderr untuk visibility
             print(
                 f"🚨 CRITICAL ALERT [{alert.component}]: {alert.title} — {alert.message}",
@@ -76,16 +72,21 @@ class AlertManager:
     # ── Template Methods ──────────────────────────────────────────
 
     async def send_circuit_breaker(
-        self, state: str, reasons: list[str], equity: float,
+        self,
+        state: str,
+        reasons: list[str],
+        equity: float,
     ) -> None:
         """Template untuk circuit breaker alert."""
-        await self.send(Alert(
-            severity=AlertSeverity.CRITICAL,
-            title=f"Circuit Breaker: {state.upper()}",
-            message=" | ".join(reasons),
-            component="circuit_breaker",
-            data={"state": state, "equity": equity, "reasons": reasons},
-        ))
+        await self.send(
+            Alert(
+                severity=AlertSeverity.CRITICAL,
+                title=f"Circuit Breaker: {state.upper()}",
+                message=" | ".join(reasons),
+                component="circuit_breaker",
+                data={"state": state, "equity": equity, "reasons": reasons},
+            )
+        )
 
     async def send_trade_opened(
         self,
@@ -99,19 +100,25 @@ class AlertManager:
     ) -> None:
         """Template untuk notifikasi trade baru."""
         emoji = "🟢" if side == "BUY" else "🔴"
-        await self.send(Alert(
-            severity=AlertSeverity.INFO,
-            title=f"{emoji} Trade Opened",
-            message=(
-                f"{side} {symbol} | {qty} @ {entry:,.2f} | "
-                f"SL: {sl:,.2f} | TP: {tp:,.2f} | Risk: ${risk_usd:.2f}"
-            ),
-            component="trade_manager",
-            data={
-                "symbol": symbol, "side": side, "qty": qty,
-                "entry": entry, "sl": sl, "tp": tp,
-            },
-        ))
+        await self.send(
+            Alert(
+                severity=AlertSeverity.INFO,
+                title=f"{emoji} Trade Opened",
+                message=(
+                    f"{side} {symbol} | {qty} @ {entry:,.2f} | "
+                    f"SL: {sl:,.2f} | TP: {tp:,.2f} | Risk: ${risk_usd:.2f}"
+                ),
+                component="trade_manager",
+                data={
+                    "symbol": symbol,
+                    "side": side,
+                    "qty": qty,
+                    "entry": entry,
+                    "sl": sl,
+                    "tp": tp,
+                },
+            )
+        )
 
     async def send_trade_closed(
         self,
@@ -123,19 +130,23 @@ class AlertManager:
     ) -> None:
         """Template untuk notifikasi trade ditutup."""
         emoji = "✅" if pnl_usd >= 0 else "❌"
-        await self.send(Alert(
-            severity=AlertSeverity.INFO,
-            title=f"{emoji} Trade Closed",
-            message=(
-                f"{symbol} {pnl_usd:+.2f} USDT ({pnl_pct:+.2f}%) | "
-                f"{hold_candles} candles | {exit_reason}"
-            ),
-            component="trade_manager",
-            data={
-                "symbol": symbol, "pnl_usd": pnl_usd,
-                "pnl_pct": pnl_pct, "exit_reason": exit_reason,
-            },
-        ))
+        await self.send(
+            Alert(
+                severity=AlertSeverity.INFO,
+                title=f"{emoji} Trade Closed",
+                message=(
+                    f"{symbol} {pnl_usd:+.2f} USDT ({pnl_pct:+.2f}%) | "
+                    f"{hold_candles} candles | {exit_reason}"
+                ),
+                component="trade_manager",
+                data={
+                    "symbol": symbol,
+                    "pnl_usd": pnl_usd,
+                    "pnl_pct": pnl_pct,
+                    "exit_reason": exit_reason,
+                },
+            )
+        )
 
     async def send_daily_summary(
         self,
@@ -146,20 +157,24 @@ class AlertManager:
         open_positions: int,
     ) -> None:
         """Ringkasan harian."""
-        await self.send(Alert(
-            severity=AlertSeverity.INFO,
-            title="📊 Daily Summary",
-            message=(
-                f"Trades: {total_trades} | WR: {win_rate:.0%} | "
-                f"PnL: {daily_pnl:+.2f} USDT | Equity: {equity:,.2f} | "
-                f"Open: {open_positions}"
-            ),
-            component="daily_summary",
-            data={
-                "total_trades": total_trades, "win_rate": win_rate,
-                "daily_pnl": daily_pnl, "equity": equity,
-            },
-        ))
+        await self.send(
+            Alert(
+                severity=AlertSeverity.INFO,
+                title="📊 Daily Summary",
+                message=(
+                    f"Trades: {total_trades} | WR: {win_rate:.0%} | "
+                    f"PnL: {daily_pnl:+.2f} USDT | Equity: {equity:,.2f} | "
+                    f"Open: {open_positions}"
+                ),
+                component="daily_summary",
+                data={
+                    "total_trades": total_trades,
+                    "win_rate": win_rate,
+                    "daily_pnl": daily_pnl,
+                    "equity": equity,
+                },
+            )
+        )
 
     # ── Query ─────────────────────────────────────────────────────
 
@@ -185,19 +200,24 @@ class AlertManager:
             emit = getattr(self._event_bus, "emit", None)
             if emit is not None:
                 if inspect.iscoroutinefunction(emit):
-                    await emit(event_type, {
-                        "severity": alert.severity.value,
-                        "title": alert.title,
-                        "message": alert.message,
-                        "component": alert.component,
-                    })
+                    await emit(
+                        event_type,
+                        {
+                            "severity": alert.severity.value,
+                            "title": alert.title,
+                            "message": alert.message,
+                            "component": alert.component,
+                        },
+                    )
                 else:
-                    emit(event_type, {
-                        "severity": alert.severity.value,
-                        "title": alert.title,
-                        "message": alert.message,
-                        "component": alert.component,
-                    })
+                    emit(
+                        event_type,
+                        {
+                            "severity": alert.severity.value,
+                            "title": alert.title,
+                            "message": alert.message,
+                            "component": alert.component,
+                        },
+                    )
         except Exception:
             logger.debug("[AlertManager] Failed to emit event %s", event_type)
-

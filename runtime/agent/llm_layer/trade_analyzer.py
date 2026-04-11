@@ -43,18 +43,20 @@ class TradeAnalyzer:
 
     async def analyze_closed_trade(self, trade: Any) -> TradeAnalysis | None:
         """Hanya untuk trade dengan |pnl| > 2x risk_amount."""
-        
+
         # Guard clause
         risk = getattr(trade, "risk_amount_usd", 1.0)
         pnl = getattr(trade, "pnl_usd", 0.0)
-        
+
         if abs(pnl) < risk * 2:
-             return None
-             
-        if not await self._budget.can_call(estimated_tokens=500, model="claude-3-5-sonnet-20241022"):
+            return None
+
+        if not await self._budget.can_call(
+            estimated_tokens=500, model="claude-3-5-sonnet-20241022"
+        ):
             log.warning("Cost budget limits reached. Skipping trade analysis.")
             return None
-            
+
         msg = f"TRADE_ID: {trade.trade_id}\n"
         msg += f"SYMBOL: {trade.symbol} | SIDE: {trade.side}\n"
         msg += f"PnL: ${pnl:.2f}\n"
@@ -67,14 +69,14 @@ class TradeAnalyzer:
             model="claude-3-5-sonnet-20241022",
             max_tokens=256,
             temperature=0.3,
-            timeout_s=15, # Boleh agak lama, bukan main tick
+            timeout_s=15,  # Boleh agak lama, bukan main tick
         )
-        
+
         resp = await self._client.call(req)
         if not resp.success:
             log.warning(f"Trade Analysis Gagal: {resp.error}")
             return None
-            
+
         try:
             data = json.loads(resp.content)
             await self._budget.record_usage(resp.cost_usd)
@@ -84,7 +86,7 @@ class TradeAnalyzer:
                 sl_assessment=data.get("sl_assessment", ""),
                 lesson=data.get("lesson", ""),
                 model_used=resp.model,
-                cost_usd=resp.cost_usd
+                cost_usd=resp.cost_usd,
             )
         except Exception as e:
             log.error(f"Gagal memparsing trade_analyzer json: {e}")

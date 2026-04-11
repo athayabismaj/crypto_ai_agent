@@ -7,7 +7,6 @@ Safeguard: model baru TIDAK di-deploy jika lebih buruk dari model lama.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -20,7 +19,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class RetrainReport:
     strategy_id: str
-    trigger: str            # 'drift' | 'scheduled' | 'manual'
+    trigger: str  # 'drift' | 'scheduled' | 'manual'
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     finished_at: datetime | None = None
     success: bool = False
@@ -133,6 +132,7 @@ class RetrainPipeline:
             # Step 8: Deploy
             log.info("[8/8] Deploying model...")
             from automation.deploy import DeployManager
+
             deployer = DeployManager(target_dir=str(self.deploy_target))
             deploy_ok = await deployer.deploy_model_from_trained(trained, strategy_id)
             report.deployed = deploy_ok
@@ -156,7 +156,11 @@ class RetrainPipeline:
                     status = "✅ SUCCESS" if report.success else f"❌ ABORT: {report.abort_reason}"
                     await self.notifier.notify(
                         "retrain_complete",
-                        {"strategy": strategy_id, "status": status, "duration": f"{report.duration_s:.0f}s"},
+                        {
+                            "strategy": strategy_id,
+                            "status": status,
+                            "duration": f"{report.duration_s:.0f}s",
+                        },
                         severity="info" if report.success else "warning",
                     )
                 except Exception:
@@ -180,16 +184,12 @@ class RetrainPipeline:
         new_sharpe = new_metrics.get("sharpe_signal", 0)
         old_sharpe = old_metrics.get("sharpe_signal", 0)
         if old_sharpe > 0 and new_sharpe < old_sharpe * 0.90:
-            return False, (
-                f"Sharpe turun terlalu banyak: {new_sharpe:.2f} vs {old_sharpe:.2f}"
-            )
+            return False, (f"Sharpe turun terlalu banyak: {new_sharpe:.2f} vs {old_sharpe:.2f}")
 
         new_ic = new_metrics.get("ic_mean", 0)
         old_ic = old_metrics.get("ic_mean", 0)
         if old_ic > 0 and new_ic < old_ic * 0.85:
-            return False, (
-                f"IC turun terlalu banyak: {new_ic:.3f} vs {old_ic:.3f}"
-            )
+            return False, (f"IC turun terlalu banyak: {new_ic:.3f} vs {old_ic:.3f}")
 
         return True, ""
 
@@ -198,7 +198,8 @@ class RetrainPipeline:
     async def _step_fetch(self, strategy_id: str) -> bool:
         """Fetch data terbaru via research/pipeline/fetch_data.py"""
         try:
-            from research.pipeline.fetch_data import run_fetch_pipeline, FetchConfig
+            from research.pipeline.fetch_data import FetchConfig, run_fetch_pipeline
+
             config = FetchConfig()
             results = run_fetch_pipeline(config)
             return len(results) > 0

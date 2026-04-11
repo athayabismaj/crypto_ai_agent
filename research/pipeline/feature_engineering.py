@@ -89,7 +89,11 @@ def _add_trend(df: pd.DataFrame, config: FeatureConfig) -> pd.DataFrame:
     macd_df = ta.macd(df["close"], fast=12, slow=26, signal=9)
     if macd_df is not None:
         for col in macd_df.columns:
-            key = col.replace("MACD_12_26_9", "macd").replace("MACDh_12_26_9", "macd_hist").replace("MACDs_12_26_9", "macd_signal")
+            key = (
+                col.replace("MACD_12_26_9", "macd")
+                .replace("MACDh_12_26_9", "macd_hist")
+                .replace("MACDs_12_26_9", "macd_signal")
+            )
             df[key] = macd_df[col]
 
     return df
@@ -139,7 +143,9 @@ def _add_volume_features(df: pd.DataFrame, config: FeatureConfig) -> pd.DataFram
 
     # VWAP approximate (intraday) — menggunakan cumulative
     typical_price = (df["high"] + df["low"] + df["close"]) / 3
-    df["vwap_20"] = (typical_price * df["volume"]).rolling(20).sum() / df["volume"].rolling(20).sum()
+    df["vwap_20"] = (typical_price * df["volume"]).rolling(20).sum() / df["volume"].rolling(
+        20
+    ).sum()
 
     return df
 
@@ -176,9 +182,7 @@ def add_target(
     Tambahkan target label: log-return N candle ke depan.
     MENGGUNAKAN shift(-N) → ini satu-satunya tempat shift negatif diizinkan.
     """
-    df[f"target_return_{horizon}h"] = np.log(
-        df[col].shift(-horizon) / df[col]
-    )
+    df[f"target_return_{horizon}h"] = np.log(df[col].shift(-horizon) / df[col])
     return df
 
 
@@ -195,9 +199,7 @@ def build_features(
 
     min_required = max(cfg.ema_periods) + 50  # buffer warmup
     if len(df) < min_required:
-        raise InsufficientDataError(
-            f"Data hanya {len(df)} baris, butuh minimal {min_required}"
-        )
+        raise InsufficientDataError(f"Data hanya {len(df)} baris, butuh minimal {min_required}")
 
     df = df.copy()
 
@@ -234,8 +236,12 @@ def get_feature_names(config: FeatureConfig | None = None) -> list[str]:
     """
     cfg = config or FeatureConfig()
     names = [
-        "log_return", "log_return_5", "log_return_20",
-        "body_pct", "wick_upper", "wick_lower",
+        "log_return",
+        "log_return_5",
+        "log_return_20",
+        "body_pct",
+        "wick_upper",
+        "wick_lower",
     ]
     for p in cfg.rsi_periods:
         names.append(f"rsi_{p}")
@@ -272,7 +278,6 @@ def validate_no_leakage(df: pd.DataFrame) -> bool:
         corr = df["close"].corr(df[col])
         if abs(corr) > 0.95:
             raise DataLeakageError(
-                f"Korelasi mencurigakan antara close dan {col}: {corr:.3f}. "
-                "Kemungkinan leakage."
+                f"Korelasi mencurigakan antara close dan {col}: {corr:.3f}. " "Kemungkinan leakage."
             )
     return True

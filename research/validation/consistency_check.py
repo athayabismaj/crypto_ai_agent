@@ -124,8 +124,10 @@ def check_feature_drift(
     > 0.2:      Drift signifikan (investigasi)
     """
     cols = feature_cols or [
-        c for c in df_old.columns
-        if c not in ("timestamp",) and not c.startswith("target_")
+        c
+        for c in df_old.columns
+        if c not in ("timestamp",)
+        and not c.startswith("target_")
         and df_old[c].dtype in (np.float64, np.float32, np.int64, float)
     ]
 

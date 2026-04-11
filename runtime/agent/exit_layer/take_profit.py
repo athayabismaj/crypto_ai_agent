@@ -65,10 +65,7 @@ class TakeProfitManager:
             return None
 
         # Cek apakah TP di-hit
-        tp_hit = (
-            (side == "BUY" and high >= tp_price)
-            or (side == "SELL" and low <= tp_price)
-        )
+        tp_hit = (side == "BUY" and high >= tp_price) or (side == "SELL" and low <= tp_price)
 
         if not tp_hit:
             return None
@@ -81,7 +78,9 @@ class TakeProfitManager:
             close_qty = filled_qty * self.partial_tp_ratio
             logger.info(
                 "[TakeProfit] Partial TP hit %s: closing %.4f (%.0f%%)",
-                trade_id, close_qty, self.partial_tp_ratio * 100,
+                trade_id,
+                close_qty,
+                self.partial_tp_ratio * 100,
             )
             return ExitDecision(
                 action=ExitAction.PARTIAL_CLOSE,

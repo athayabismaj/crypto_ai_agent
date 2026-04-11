@@ -6,7 +6,6 @@ Early warning system paling kritis di learning layer.
 
 import json
 import logging
-import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -40,7 +39,7 @@ class DriftDetector:
 
     def _load_metadata(self) -> dict[str, Any]:
         try:
-            with open(self.metadata_path, 'r') as f:
+            with open(self.metadata_path) as f:
                 return json.load(f)
         except Exception as e:
             log.warning(f"Gagal memuat metadata.json: {e}")
@@ -54,10 +53,10 @@ class DriftDetector:
         """
         if not expected or not actual:
             return 0.0
-            
+
         # Simplified for prototype - in real production use pandas.qcut
         # Just return a mock value based on length difference for now to avoid crashing without pandas
-        return 0.05 
+        return 0.05
 
     def compute_rolling_ic(self, predictions: list[float], actual_returns: list[float]) -> float:
         """Spearman correlation rolling window terakhir."""
@@ -84,7 +83,7 @@ class DriftDetector:
 
         # Dummy checks
         rolling_ic = self.compute_rolling_ic([], [])
-        
+
         wins = sum(1 for t in live_trades if t.get("pnl_usd", 0) > 0)
         rolling_win_rate = wins / len(live_trades) if live_trades else baseline_win_rate
 
@@ -116,7 +115,7 @@ class DriftDetector:
             needs_retrain=needs_retrain,
             needs_alert=needs_alert,
             severity=severity,
-            recommended_action=""
+            recommended_action="",
         )
         report.recommended_action = self.get_retrain_recommendation(report)
         return report

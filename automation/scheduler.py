@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import shutil
 import sqlite3
 from datetime import datetime, timezone
@@ -56,7 +55,7 @@ async def rotate_logs() -> None:
     """
     log.info("Memulai cron rotate_logs...")
     now = datetime.now(timezone.utc)
-    
+
     try:
         import gzip
 
@@ -87,7 +86,7 @@ async def vacuum_databases() -> None:
     VACUUM semua db SQLite untuk reclaim space.
     """
     log.info("Memulai cron vacuum_databases...")
-    
+
     for db_path in DB_DIR.glob("*.db"):
         log.info(f"Vacuuming {db_path}...")
         try:
@@ -95,15 +94,15 @@ async def vacuum_databases() -> None:
             conn = sqlite3.connect(db_path, timeout=30)
             conn.execute("VACUUM")
             conn.close()
-            
+
             # Print file size info
             size_mb = db_path.stat().st_size / (1024 * 1024)
             log.info(f"Vacuum selesai: {db_path.name} (Ukuran sekarang: {size_mb:.2f} MB)")
         except sqlite3.OperationalError as e:
-             if "database is locked" in str(e):
-                 log.warning(f"Skip vacuum {db_path.name} (sedang dilock agent)")
-             else:
-                 log.error(f"Gagal vacuum {db_path.name}: {e}")
+            if "database is locked" in str(e):
+                log.warning(f"Skip vacuum {db_path.name} (sedang dilock agent)")
+            else:
+                log.error(f"Gagal vacuum {db_path.name}: {e}")
         except Exception as e:
             log.error(f"Gagal vacuum {db_path.name}: {e}")
 
@@ -116,9 +115,9 @@ async def backup_databases() -> None:
     """
     log.info("Memulai cron backup_databases...")
     import gzip
-    
+
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
-    
+
     try:
         # Buat backup baru
         for db_path in DB_DIR.glob("*.db"):
@@ -126,36 +125,36 @@ async def backup_databases() -> None:
             if not backup_file.exists():
                 with open(db_path, "rb") as f_in:
                     with gzip.open(backup_file, "wb") as f_out:
-                         shutil.copyfileobj(f_in, f_out)
+                        shutil.copyfileobj(f_in, f_out)
                 log.info(f"Database backup: {backup_file}")
-                
+
         # Clean up backup lama (> 7 hari)
         now = datetime.now(timezone.utc)
         for gz_file in BACKUP_DIR.glob("*.db.gz"):
-             mtime = datetime.fromtimestamp(gz_file.stat().st_mtime, tz=timezone.utc)
-             days_old = (now - mtime).days
-             if days_old > 7:
-                 gz_file.unlink()
-                 log.info(f"Menghapus backup DB lama (>7 hari): {gz_file.name}")
-                 
+            mtime = datetime.fromtimestamp(gz_file.stat().st_mtime, tz=timezone.utc)
+            days_old = (now - mtime).days
+            if days_old > 7:
+                gz_file.unlink()
+                log.info(f"Menghapus backup DB lama (>7 hari): {gz_file.name}")
+
     except Exception as e:
-         log.error(f"Backup databases gagal: {e}")
+        log.error(f"Backup databases gagal: {e}")
 
 
 # ── Runner Sederhana ──
 if __name__ == "__main__":
     # Setup basic logging
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    
+
     # Arg parsing sangat sederhana
     import sys
-    
+
     if len(sys.argv) < 2:
         print("Usage: python scheduler.py [retrain|rotate|vacuum|backup]")
         sys.exit(1)
-        
+
     task = sys.argv[1]
-    
+
     if task == "retrain":
         asyncio.run(run_weekly_retrain())
     elif task == "rotate":

@@ -38,7 +38,7 @@ class BacktestMetrics:
     calmar_ratio: float
     win_rate: float
     profit_factor: float
-    avg_rr: float              # avg win / avg loss
+    avg_rr: float  # avg win / avg loss
     total_trades: int
     winning_trades: int
     losing_trades: int

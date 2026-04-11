@@ -48,7 +48,7 @@ class IdempotencyManager:
                 (client_order_id,),
             )
             row: aiosqlite.Row | None = await cursor.fetchone()
-            
+
             if not row:
                 raise RuntimeError("Gagal membaca hasil insert idempotency_registry")
 
@@ -62,7 +62,7 @@ class IdempotencyManager:
             else:
                 # confirmed, failed, dsb
                 result = IdempotencyResult.DUPLICATE
-                
+
             await conn.commit()
             return result
         except Exception:
@@ -100,7 +100,7 @@ class IdempotencyManager:
 
         cutoff = (utcnow() - timedelta(days=older_than_days)).isoformat()
         conn = self._db.connection
-        
+
         cursor = await conn.execute(
             'DELETE FROM idempotency_registry WHERE updated_at < ? AND status IN ("confirmed", "failed")',
             (cutoff,),

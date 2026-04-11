@@ -16,8 +16,9 @@ Mengikuti checklist docs section 14.1.
 
 from __future__ import annotations
 
-import pytest
 from types import SimpleNamespace
+
+import pytest
 
 from runtime.agent.exit_layer.break_even import BreakEvenManager
 from runtime.agent.exit_layer.exit_manager import ExitManager
@@ -25,7 +26,6 @@ from runtime.agent.exit_layer.take_profit import TakeProfitManager
 from runtime.agent.exit_layer.trailing import TrailingStopManager
 from runtime.agent.models.enums import ExitAction
 from runtime.agent.models.exit import HOLD_DECISION, ExitDecision
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  Helpers
@@ -64,10 +64,17 @@ class TestStopLoss:
         mgr.register_trade("T1", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T1", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=50500, low=48900, close=49200,
+            trade_id="T1",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50500,
+            low=48900,
+            close=49200,
             atr=500,
         )
         assert result.action == ExitAction.EXIT_SL
@@ -81,10 +88,17 @@ class TestStopLoss:
         mgr.register_trade("T2", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T2", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=50500, low=49100, close=50200,
+            trade_id="T2",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50500,
+            low=49100,
+            close=50200,
             atr=500,
         )
         assert result.action == ExitAction.HOLD
@@ -96,10 +110,17 @@ class TestStopLoss:
         mgr.register_trade("T3", "SELL", 50000, 51000, 48000)
 
         result = mgr.evaluate(
-            trade_id="T3", symbol="BTCUSDT", side="SELL",
-            entry_price=50000, sl_price=51000, tp_price=48000,
-            filled_qty=0.001, hold_candles=1,
-            high=51100, low=49800, close=50500,
+            trade_id="T3",
+            symbol="BTCUSDT",
+            side="SELL",
+            entry_price=50000,
+            sl_price=51000,
+            tp_price=48000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=51100,
+            low=49800,
+            close=50500,
             atr=500,
         )
         assert result.action == ExitAction.EXIT_SL
@@ -111,10 +132,17 @@ class TestStopLoss:
         mgr.register_trade("T4", "SELL", 50000, 51000, 48000)
 
         result = mgr.evaluate(
-            trade_id="T4", symbol="BTCUSDT", side="SELL",
-            entry_price=50000, sl_price=51000, tp_price=48000,
-            filled_qty=0.001, hold_candles=1,
-            high=50800, low=49800, close=50200,
+            trade_id="T4",
+            symbol="BTCUSDT",
+            side="SELL",
+            entry_price=50000,
+            sl_price=51000,
+            tp_price=48000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50800,
+            low=49800,
+            close=50200,
             atr=500,
         )
         assert result.action == ExitAction.HOLD
@@ -126,10 +154,17 @@ class TestStopLoss:
         mgr.register_trade("T5", "BUY", 50000, 0, 52000)
 
         result = mgr.evaluate(
-            trade_id="T5", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=0, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=50500, low=100, close=50200,
+            trade_id="T5",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=0,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50500,
+            low=100,
+            close=50200,
             atr=500,
         )
         # Tidak EXIT_SL karena sl_price = 0
@@ -151,17 +186,23 @@ class TestTrailingStop:
         trailing.register("T1", "BUY", 50000, 49000)
 
         # Harga naik → trail naik
-        r1 = trailing.update("T1", "BUY", 50000, 49000,
-                             high=52000, low=51500, close=51800, atr=500)
+        r1 = trailing.update("T1", "BUY", 50000, 49000, high=52000, low=51500, close=51800, atr=500)
         assert r1 is not None
         assert r1.action == ExitAction.UPDATE_SL
         old_trail = r1.new_sl
         assert old_trail > 49000  # trail has moved up
 
         # Harga turun tapi masih di atas trail → trail TIDAK ikut turun
-        r2 = trailing.update("T1", "BUY", 50000, 49000,
-                             high=51500, low=old_trail + 100,
-                             close=old_trail + 200, atr=500)
+        r2 = trailing.update(
+            "T1",
+            "BUY",
+            50000,
+            49000,
+            high=51500,
+            low=old_trail + 100,
+            close=old_trail + 200,
+            atr=500,
+        )
         # Trailing tidak bergerak karena high tidak melebihi highest_high
         # Jadi harusnya None (no update) karena new trail <= current trail
         assert r2 is None  # ratchet: trail tidak turun
@@ -173,15 +214,17 @@ class TestTrailingStop:
         trailing.register("T2", "SELL", 50000, 51000)
 
         # Harga turun → trail turun
-        r1 = trailing.update("T2", "SELL", 50000, 51000,
-                             high=49800, low=49000, close=49200, atr=500)
+        r1 = trailing.update(
+            "T2", "SELL", 50000, 51000, high=49800, low=49000, close=49200, atr=500
+        )
         assert r1 is not None
         assert r1.action == ExitAction.UPDATE_SL
         old_trail = r1.new_sl
 
         # Harga naik → trail TIDAK ikut naik
-        r2 = trailing.update("T2", "SELL", 50000, 51000,
-                             high=49800, low=49500, close=49700, atr=500)
+        r2 = trailing.update(
+            "T2", "SELL", 50000, 51000, high=49800, low=49500, close=49700, atr=500
+        )
         if r2 is not None:
             assert r2.new_sl <= old_trail
 
@@ -192,8 +235,9 @@ class TestTrailingStop:
         trailing.register("T3", "BUY", 50000, 49000)
 
         # Profit 0.5R (risk = 1000, profit = 500) → trailing TIDAK aktif
-        result = trailing.update("T3", "BUY", 50000, 49000,
-                                 high=50500, low=50300, close=50500, atr=300)
+        result = trailing.update(
+            "T3", "BUY", 50000, 49000, high=50500, low=50300, close=50500, atr=300
+        )
         assert result is None
         state = trailing.get_state("T3")
         assert state is not None
@@ -206,8 +250,9 @@ class TestTrailingStop:
         trailing.register("T4", "BUY", 50000, 49000)
 
         # Profit 1.0R (risk = 1000, profit = 1000) → trailing AKTIF
-        result = trailing.update("T4", "BUY", 50000, 49000,
-                                 high=51000, low=50800, close=51000, atr=300)
+        result = trailing.update(
+            "T4", "BUY", 50000, 49000, high=51000, low=50800, close=51000, atr=300
+        )
         state = trailing.get_state("T4")
         assert state is not None
         assert state.activated
@@ -219,17 +264,23 @@ class TestTrailingStop:
         trailing.register("T5", "BUY", 50000, 49000)
 
         # Harga naik → trail update
-        trailing.update("T5", "BUY", 50000, 49000,
-                        high=52000, low=51500, close=51800, atr=500)
+        trailing.update("T5", "BUY", 50000, 49000, high=52000, low=51500, close=51800, atr=500)
 
         # Harga turun menembus trail level
         state = trailing.get_state("T5")
         assert state is not None
         trail_level = state.current_trail
 
-        result = trailing.update("T5", "BUY", 50000, 49000,
-                                 high=trail_level, low=trail_level - 100,
-                                 close=trail_level - 50, atr=500)
+        result = trailing.update(
+            "T5",
+            "BUY",
+            50000,
+            49000,
+            high=trail_level,
+            low=trail_level - 100,
+            close=trail_level - 50,
+            atr=500,
+        )
         assert result is not None
         assert result.action == ExitAction.EXIT_TRAIL
 
@@ -257,8 +308,7 @@ class TestTakeProfit:
         tp_mgr = TakeProfitManager(cfg)
         tp_mgr.register("T1", 52000)
 
-        result = tp_mgr.check("T1", "BUY", 50000, 52000, 0.001,
-                              high=52100, low=51500)
+        result = tp_mgr.check("T1", "BUY", 50000, 52000, 0.001, high=52100, low=51500)
         assert result is not None
         assert result.action == ExitAction.EXIT_TP
 
@@ -268,8 +318,7 @@ class TestTakeProfit:
         tp_mgr = TakeProfitManager(cfg)
         tp_mgr.register("T2", 52000)
 
-        result = tp_mgr.check("T2", "BUY", 50000, 52000, 0.002,
-                              high=52100, low=51800)
+        result = tp_mgr.check("T2", "BUY", 50000, 52000, 0.002, high=52100, low=51800)
         assert result is not None
         assert result.action == ExitAction.PARTIAL_CLOSE
         assert result.close_qty == pytest.approx(0.001, abs=1e-6)  # 50%
@@ -282,13 +331,11 @@ class TestTakeProfit:
         tp_mgr.register("T3", 52000)
 
         # First hit → partial
-        r1 = tp_mgr.check("T3", "BUY", 50000, 52000, 0.002,
-                           high=52100, low=51800)
+        r1 = tp_mgr.check("T3", "BUY", 50000, 52000, 0.002, high=52100, low=51800)
         assert r1.action == ExitAction.PARTIAL_CLOSE
 
         # Second hit → full close
-        r2 = tp_mgr.check("T3", "BUY", 50000, 52000, 0.001,
-                           high=52200, low=51900)
+        r2 = tp_mgr.check("T3", "BUY", 50000, 52000, 0.001, high=52200, low=51900)
         assert r2 is not None
         assert r2.action == ExitAction.EXIT_TP
 
@@ -298,8 +345,7 @@ class TestTakeProfit:
         tp_mgr = TakeProfitManager(cfg)
         tp_mgr.register("T4", 0)
 
-        result = tp_mgr.check("T4", "BUY", 50000, 0, 0.001,
-                              high=99999, low=50000)
+        result = tp_mgr.check("T4", "BUY", 50000, 0, 0.001, high=99999, low=50000)
         assert result is None
 
     def test_sell_tp_hit_by_low(self):
@@ -308,8 +354,7 @@ class TestTakeProfit:
         tp_mgr = TakeProfitManager(cfg)
         tp_mgr.register("T5", 48000)
 
-        result = tp_mgr.check("T5", "SELL", 50000, 48000, 0.001,
-                              high=49500, low=47900)
+        result = tp_mgr.check("T5", "SELL", 50000, 48000, 0.001, high=49500, low=47900)
         assert result is not None
         assert result.action == ExitAction.EXIT_TP
 
@@ -401,10 +446,17 @@ class TestTimeout:
         mgr.register_trade("T1", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T1", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=48,
-            high=50500, low=49100, close=50200,
+            trade_id="T1",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=48,
+            high=50500,
+            low=49100,
+            close=50200,
             atr=500,
         )
         assert result.action == ExitAction.EXIT_TIMEOUT
@@ -416,10 +468,17 @@ class TestTimeout:
         mgr.register_trade("T2", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T2", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=47,
-            high=50500, low=49100, close=50200,
+            trade_id="T2",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=47,
+            high=50500,
+            low=49100,
+            close=50200,
             atr=500,
         )
         assert result.action == ExitAction.HOLD
@@ -441,10 +500,17 @@ class TestExitManagerPriority:
 
         # Candle besar: low < SL DAN high > TP
         result = mgr.evaluate(
-            trade_id="T1", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=53000, low=48000, close=50000,
+            trade_id="T1",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=53000,
+            low=48000,
+            close=50000,
             atr=500,
         )
         assert result.action == ExitAction.EXIT_SL  # SL dievaluasi duluan
@@ -456,14 +522,23 @@ class TestExitManagerPriority:
         mgr.register_trade("T2", "BUY", 50000, 49000, 52000)
 
         exit_signal = SimpleNamespace(
-            reason="regime_change", urgency="urgent",
-            confidence=0.9, exit_price=50500,
+            reason="regime_change",
+            urgency="urgent",
+            confidence=0.9,
+            exit_price=50500,
         )
         result = mgr.evaluate(
-            trade_id="T2", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=50500, low=49500, close=50200,
+            trade_id="T2",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50500,
+            low=49500,
+            close=50200,
             atr=500,
             strategy_exit=exit_signal,
         )
@@ -477,10 +552,17 @@ class TestExitManagerPriority:
         mgr.register_trade("T3", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T3", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=50500, low=49100, close=50200,
+            trade_id="T3",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50500,
+            low=49100,
+            close=50200,
             atr=500,
         )
         assert result.action == ExitAction.HOLD
@@ -517,12 +599,18 @@ class TestRecovery:
 
         trades = [
             SimpleNamespace(
-                trade_id="T1", side="BUY",
-                avg_fill_price=50000, stop_loss=49000, take_profit=52000,
+                trade_id="T1",
+                side="BUY",
+                avg_fill_price=50000,
+                stop_loss=49000,
+                take_profit=52000,
             ),
             SimpleNamespace(
-                trade_id="T2", side="SELL",
-                avg_fill_price=60000, stop_loss=61000, take_profit=58000,
+                trade_id="T2",
+                side="SELL",
+                avg_fill_price=60000,
+                stop_loss=61000,
+                take_profit=58000,
             ),
         ]
         mgr.register_open_positions(trades)
@@ -564,15 +652,23 @@ class TestPureFunction:
         mgr.register_trade("T1", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T1", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=50500, low=49100, close=50200,
+            trade_id="T1",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50500,
+            low=49100,
+            close=50200,
             atr=500,
         )
         assert isinstance(result, ExitDecision)
         # Bukan coroutine — bisa dipanggil tanpa await
         import asyncio
+
         assert not asyncio.iscoroutine(result)
 
 
@@ -591,10 +687,17 @@ class TestEdgeCases:
         mgr.register_trade("T1", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T1", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=50200, low=49000, close=49100,  # low == sl
+            trade_id="T1",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=50200,
+            low=49000,
+            close=49100,  # low == sl
             atr=500,
         )
         assert result.action == ExitAction.EXIT_SL
@@ -608,10 +711,17 @@ class TestEdgeCases:
         mgr.register_trade("T2", "BUY", 50000, 49000, 52000)
 
         result = mgr.evaluate(
-            trade_id="T2", symbol="BTCUSDT", side="BUY",
-            entry_price=50000, sl_price=49000, tp_price=52000,
-            filled_qty=0.001, hold_candles=1,
-            high=52000, low=50500, close=51800,  # high == tp
+            trade_id="T2",
+            symbol="BTCUSDT",
+            side="BUY",
+            entry_price=50000,
+            sl_price=49000,
+            tp_price=52000,
+            filled_qty=0.001,
+            hold_candles=1,
+            high=52000,
+            low=50500,
+            close=51800,  # high == tp
             atr=500,
         )
         assert result.action == ExitAction.EXIT_TP
@@ -619,14 +729,16 @@ class TestEdgeCases:
     def test_trailing_percentage_method(self):
         """Trailing percentage method bekerja."""
         cfg = make_config(
-            trailing_method="percentage", trail_pct=0.02,
+            trailing_method="percentage",
+            trail_pct=0.02,
             trail_activation_r=0.0,
         )
         trailing = TrailingStopManager(cfg)
         trailing.register("T1", "BUY", 50000, 49000)
 
-        result = trailing.update("T1", "BUY", 50000, 49000,
-                                 high=51000, low=50500, close=50800, atr=500)
+        result = trailing.update(
+            "T1", "BUY", 50000, 49000, high=51000, low=50500, close=50800, atr=500
+        )
         assert result is not None
         assert result.action == ExitAction.UPDATE_SL
         # Trail level = 51000 * (1 - 0.02) = 49980

@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 
 class ModelNotReadyError(Exception):
     """Raised ketika model gagal melewati threshold minimum."""
+
     pass
 
 

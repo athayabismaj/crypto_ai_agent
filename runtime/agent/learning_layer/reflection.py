@@ -51,7 +51,7 @@ class ReflectionEngine:
 
         pnl_r = pnl / max(0.0001, risk)
         verdict = "acceptable"
-        
+
         if pnl_r >= 2.0:
             verdict = "good"
         elif pnl_r >= 0 or -0.5 < pnl_r <= 0:
@@ -70,11 +70,11 @@ class ReflectionEngine:
             process_followed = False
             negatives.append("SL tidak dihormati atau sizing melebihi batas")
             lessons.append("Tegakkan strict SL")
-        
+
         if row["hold_candles"] < 3 and pnl > 0:
             negatives.append("Keluar posisi terlalu cepat (prematur profit taking)")
             lessons.append("Geser trailing mult untuk memberi ruang napas")
-            
+
         if pnl_r > 3.0:
             positives.append("Excellent trend capture")
 
@@ -89,7 +89,7 @@ class ReflectionEngine:
             regime_at_entry=row["regime_at_entry"],
             confidence=row["confidence_at_entry"],
             hold_candles=row["hold_candles"],
-            exit_reason=row["exit_reason"]
+            exit_reason=row["exit_reason"],
         )
 
     async def reflect_batch(self, strategy_id: str) -> BatchReflection:
@@ -97,34 +97,38 @@ class ReflectionEngine:
         Analisa pattern harian untuk melihat pola kesalahan jamak.
         """
         assert self._processor._db.exp_conn is not None
-        
+
         cursor = await self._processor._db.exp_conn.execute(
             "SELECT * FROM closed_trades WHERE strategy_id = ? ORDER BY exit_time DESC LIMIT 50",
-            (strategy_id,)
+            (strategy_id,),
         )
         rows = await cursor.fetchall()
-        
+
         reflections = [self.reflect_trade(dict(r)) for r in rows]
-        
+
         # Contoh pattern matching sederhana
         repeated = []
         tags = []
-        
+
         # Cek sideways loss
-        sideways_loss = sum(1 for r in reflections if r.regime_at_entry == "sideways" and r.pnl_r < 0)
+        sideways_loss = sum(
+            1 for r in reflections if r.regime_at_entry == "sideways" and r.pnl_r < 0
+        )
         if sideways_loss >= 3:
             repeated.append("Loss berulang di regime SIDEWAYS")
             tags.append("ADD_REGIME_FILTER_SIDEWAYS")
-            
+
         # Cek trailing ketat
-        trail_premature = sum(1 for r in reflections if r.exit_reason == "TRAIL" and r.pnl_r < 1.0 and r.pnl_r > 0)
+        trail_premature = sum(
+            1 for r in reflections if r.exit_reason == "TRAIL" and r.pnl_r < 1.0 and r.pnl_r > 0
+        )
         if trail_premature >= 5:
             repeated.append("Profit tergerus oleh trailing terlalu ketat")
             tags.append("INCREASE_TRAIL_MULT")
-            
+
         return BatchReflection(
             strategy_id=strategy_id,
             summary_lessons=["Review completed"],
             repeated_mistakes=repeated,
-            recommendation_tags=tags
+            recommendation_tags=tags,
         )

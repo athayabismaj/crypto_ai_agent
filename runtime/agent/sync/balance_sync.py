@@ -24,14 +24,18 @@ logger = logging.getLogger(__name__)
 class ExchangeBalanceProvider(Protocol):
     """Interface untuk fetch balance dari exchange."""
 
-    async def get_balance_usdt(self) -> float: ...
+    async def get_balance_usdt(self) -> float:
+        ...
 
 
 class CapitalUpdater(Protocol):
     """Interface untuk update equity di CapitalManager."""
 
-    def get_current_equity(self) -> float: ...
-    def update_from_exchange(self, actual: float) -> None: ...
+    def get_current_equity(self) -> float:
+        ...
+
+    def update_from_exchange(self, actual: float) -> None:
+        ...
 
 
 class BalanceSync:
@@ -41,7 +45,7 @@ class BalanceSync:
     bukan sebaliknya.
     """
 
-    MAX_DRIFT_PCT: float = 0.01   # 1%
+    MAX_DRIFT_PCT: float = 0.01  # 1%
     ALERT_DRIFT_PCT: float = 0.05  # 5%
 
     def __init__(
@@ -78,33 +82,39 @@ class BalanceSync:
         if drift_pct > self.ALERT_DRIFT_PCT:
             logger.critical(
                 "[BalanceSync] DRIFT SIGNIFIKAN: internal=%.2f, exchange=%.2f, drift=%.1f%%",
-                internal, actual, drift_pct * 100,
+                internal,
+                actual,
+                drift_pct * 100,
             )
             alert_sent = True
             if self._alerts is not None:
                 try:
                     send = getattr(self._alerts, "send", None)
                     if send:
-                        await send(Alert(
-                            severity=AlertSeverity.CRITICAL,
-                            title="Balance drift signifikan",
-                            message=(
-                                f"Internal: {internal:.2f}, Exchange: {actual:.2f}, "
-                                f"Drift: {drift_pct:.1%}"
-                            ),
-                            component="balance_sync",
-                            data={
-                                "internal": internal,
-                                "exchange": actual,
-                                "drift_pct": drift_pct,
-                            },
-                        ))
+                        await send(
+                            Alert(
+                                severity=AlertSeverity.CRITICAL,
+                                title="Balance drift signifikan",
+                                message=(
+                                    f"Internal: {internal:.2f}, Exchange: {actual:.2f}, "
+                                    f"Drift: {drift_pct:.1%}"
+                                ),
+                                component="balance_sync",
+                                data={
+                                    "internal": internal,
+                                    "exchange": actual,
+                                    "drift_pct": drift_pct,
+                                },
+                            )
+                        )
                 except Exception:
                     logger.debug("[BalanceSync] Failed to send alert")
         elif drift_pct > self.MAX_DRIFT_PCT:
             logger.warning(
                 "[BalanceSync] Drift detected: internal=%.2f, exchange=%.2f, drift=%.1f%%",
-                internal, actual, drift_pct * 100,
+                internal,
+                actual,
+                drift_pct * 100,
             )
 
         # Update internal dengan nilai aktual (exchange is truth)

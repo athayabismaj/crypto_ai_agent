@@ -138,7 +138,11 @@ class PositionSizer:
             )
 
         # Recalculate actual risk_usd berdasarkan final_qty
-        stop_dist = abs(price - request.suggested_sl) if request.suggested_sl > 0 else price * self.default_sl_pct
+        stop_dist = (
+            abs(price - request.suggested_sl)
+            if request.suggested_sl > 0
+            else price * self.default_sl_pct
+        )
         actual_risk_usd = final_qty * stop_dist
 
         logger.debug(

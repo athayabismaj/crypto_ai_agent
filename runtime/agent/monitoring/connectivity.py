@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import UTC, datetime
 
 from runtime.agent.models.enums import ConnStatus  # type: ignore
 
@@ -50,10 +49,7 @@ class ConnectivityChecker:
 
         Return dict[endpoint_name, ConnStatus].
         """
-        tasks = {
-            name: self._check_endpoint(url)
-            for name, url in self.ENDPOINTS.items()
-        }
+        tasks = {name: self._check_endpoint(url) for name, url in self.ENDPOINTS.items()}
 
         results: dict[str, ConnStatus] = {}
         for name, coro in tasks.items():

@@ -81,20 +81,22 @@ class LLMFilter:
         # Prompt user payload
         msg = f"SIGNAL: {signal.side} {signal.symbol} via {signal.strategy_id}\n"
         msg += f"Confidence Base: {getattr(signal, 'final_confidence', 0.5):.2f}\n"
-        
+
         # Market State
         msg += f"MARKET REGIME: {getattr(state, 'regime', 'unknown')}\n"
-        if hasattr(state, 'volatility_atr'):
-             msg += f"VOLATILITY ATR: {getattr(state, 'volatility_atr', 'unknown')}\n"
-             
+        if hasattr(state, "volatility_atr"):
+            msg += f"VOLATILITY ATR: {getattr(state, 'volatility_atr', 'unknown')}\n"
+
         # History
-        win_count = sum(1 for t in last_trades if t.get('pnl_usd', 0) > 0)
+        win_count = sum(1 for t in last_trades if t.get("pnl_usd", 0) > 0)
         total_recent = len(last_trades)
         msg += f"RECENT TRADES: {win_count} wins out of {total_recent}\n\n"
         msg += "Berdasarkan data di atas, tolong berikan penilaian JSON Anda."
         return msg
 
-    async def score_signal(self, signal: Any, state: Any, last_trades: list[dict[str, Any]]) -> LLMScore:
+    async def score_signal(
+        self, signal: Any, state: Any, last_trades: list[dict[str, Any]]
+    ) -> LLMScore:
         # Step 1: Budget check
         if not await self._budget.can_call(estimated_tokens=300):
             return self._fallback("Budget harian habis")
@@ -110,7 +112,7 @@ class LLMFilter:
             model=getattr(self._config, "llm_model", "claude-3-5-haiku-20241022"),
             max_tokens=256,
             temperature=0.1,
-            timeout_s=10, # jangan sampai memblokir main loop terlalu lama
+            timeout_s=10,  # jangan sampai memblokir main loop terlalu lama
         )
 
         response = await self._client.call(request)
@@ -139,28 +141,35 @@ class LLMFilter:
             fallback_used=False,
         )
 
-    async def apply_llm_filter(self, signal: Any, state: Any, last_trades: list[dict[str, Any]]) -> Any | None:
+    async def apply_llm_filter(
+        self, signal: Any, state: Any, last_trades: list[dict[str, Any]]
+    ) -> Any | None:
         """Helper flow wrapper untuk main_loop"""
         if not getattr(self._config, "llm_enabled", False):
-            return signal 
+            return signal
 
         score = await self.score_signal(signal, state, last_trades)
 
         signal.final_confidence = min(
-            getattr(signal, 'final_confidence', 0.5) * score.confidence_multiplier, 1.0
+            getattr(signal, "final_confidence", 0.5) * score.confidence_multiplier, 1.0
         )
-        
-        if not hasattr(signal, 'metadata'):
+
+        if not hasattr(signal, "metadata"):
             signal.metadata = {}
-            
-        signal.metadata['llm_score'] = {
-            'multiplier': score.confidence_multiplier,
-            'reasoning': score.reasoning,
-            'fallback': score.fallback_used,
+
+        signal.metadata["llm_score"] = {
+            "multiplier": score.confidence_multiplier,
+            "reasoning": score.reasoning,
+            "fallback": score.fallback_used,
         }
 
-        if signal.final_confidence < getattr(self._config, "min_signal_confidence", 0.60) or not score.proceed:
-            log.info(f"Signal {signal.symbol} ditolak LLM. Confidence {signal.final_confidence:.2f} < Minimum.")
+        if (
+            signal.final_confidence < getattr(self._config, "min_signal_confidence", 0.60)
+            or not score.proceed
+        ):
+            log.info(
+                f"Signal {signal.symbol} ditolak LLM. Confidence {signal.final_confidence:.2f} < Minimum."
+            )
             return None
 
         return signal

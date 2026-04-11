@@ -4,7 +4,6 @@ Meng-handle request sign, rate limit, retries, dan parsing JSON response.
 Terintegrasi secara asinkron menggunakan aiohttp.
 """
 
-import asyncio
 import hashlib
 import hmac
 import logging
@@ -18,9 +17,11 @@ from runtime.shared.utils import utcnow  # type: ignore
 
 log = logging.getLogger(__name__)
 
+
 class BinanceExchangeError(Exception):
     pass
-    
+
+
 class OrderNotFoundError(Exception):
     pass
 
@@ -48,11 +49,9 @@ class BinanceExchange(BaseExchange):
 
     async def connect(self) -> None:
         """Membuka session aiohttp dan sinkronisasi waktu UTC server."""
-        self._session = aiohttp.ClientSession(
-            headers={"X-MBX-APIKEY": self._key}
-        )
+        self._session = aiohttp.ClientSession(headers={"X-MBX-APIKEY": self._key})
         await self._sync_time()
-        
+
         # Di environment nyata, di sini akan ditarik exchangeInfo untuk mempopulerkan _lot_cache.
 
     async def disconnect(self) -> None:
@@ -79,38 +78,36 @@ class BinanceExchange(BaseExchange):
     def _sign(self, query_string: str) -> str:
         """Membuat signature HMAC SHA256 menggunakan _secret."""
         return hmac.new(
-            self._secret.encode("utf-8"),
-            query_string.encode("utf-8"),
-            hashlib.sha256
+            self._secret.encode("utf-8"), query_string.encode("utf-8"), hashlib.sha256
         ).hexdigest()
 
     async def _signed_request(self, method: str, url: str, params: dict) -> dict:
         if not self._session:
             raise RuntimeError("BinanceExchange belum terkoneksi. Panggil connect().")
-            
+
         params["timestamp"] = self._get_timestamp()
         params["recvWindow"] = 5000
-        
+
         query_string = urlencode(params)
         signature = self._sign(query_string)
-        
+
         # Tambahkan signature ke final URL parameter
         final_url = f"{url}?{query_string}&signature={signature}"
-        
+
         async with self._session.request(method, final_url) as response:
             data = await response.json()
-            
+
             # Rate limiting detection (Mock for now or reading headers in real life)
-            
+
             # Error handling
             if response.status >= 400:
                 code = data.get("code", 0)
                 msg = data.get("msg", "Unknown error")
-                
+
                 if code == -2011:
                     raise OrderNotFoundError(f"Order not found: {msg}")
                 raise BinanceExchangeError(f"Binance API Error {code}: {msg} -> {data}")
-                
+
             return data
 
     def get_lot_filter(self, symbol: str) -> Any:
@@ -124,13 +121,13 @@ class BinanceExchange(BaseExchange):
         return OrderResponse(
             exchange_order_id=str(data.get("orderId", "")),
             client_order_id=data.get("clientOrderId", client_order_id),
-            status=data.get("status", "NEW"), # NEW, FILLED, dsb
+            status=data.get("status", "NEW"),  # NEW, FILLED, dsb
             filled_qty=float(data.get("executedQty", 0.0)),
             avg_price=float(data.get("avgPrice", 0.0) or data.get("price", 0.0)),
-            commission=0.0, # di Binance endpoint spesifik kadang tidak mengembalikan fee
+            commission=0.0,  # di Binance endpoint spesifik kadang tidak mengembalikan fee
             commission_asset="USDT",
-            timestamp=utcnow(), # fallback default jika gaada updatetime
-            raw_response=data
+            timestamp=utcnow(),  # fallback default jika gaada updatetime
+            raw_response=data,
         )
 
     async def place_order(self, order: OrderRequest) -> OrderResponse:
@@ -169,39 +166,39 @@ class BinanceExchange(BaseExchange):
 
     async def cancel_order(self, symbol: str, client_order_id: str) -> bool:
         base = self.BASE_URL_TESTNET if self._testnet else self.BASE_URL_FUTURES
-        endpoint = "/fapi/v1/order" # assume futures for now unless genericized
-        
+        endpoint = "/fapi/v1/order"  # assume futures for now unless genericized
+
         if self._rate_lim:
             await self._rate_lim.acquire(endpoint, is_order=True)
 
         try:
-            await self._signed_request("DELETE", f"{base}{endpoint}", {
-                "symbol": symbol,
-                "origClientOrderId": client_order_id
-            })
+            await self._signed_request(
+                "DELETE",
+                f"{base}{endpoint}",
+                {"symbol": symbol, "origClientOrderId": client_order_id},
+            )
             return True
         except OrderNotFoundError:
             log.warning(f"Cancel failed: order {client_order_id} ga ketemu.")
-            return True # If it's already missing, assume canceled/filled.
-            
+            return True  # If it's already missing, assume canceled/filled.
+
     async def get_order_status(self, symbol: str, client_order_id: str) -> OrderResponse:
         """Pengecekan ke exchange, error dilempar bila not-found / timeout"""
         base = self.BASE_URL_TESTNET if self._testnet else self.BASE_URL_FUTURES
         endpoint = "/fapi/v1/order"
-        
+
         if self._rate_lim:
             await self._rate_lim.acquire(endpoint)
 
-        data = await self._signed_request("GET", f"{base}{endpoint}", {
-            "symbol": symbol,
-            "origClientOrderId": client_order_id
-        })
+        data = await self._signed_request(
+            "GET", f"{base}{endpoint}", {"symbol": symbol, "origClientOrderId": client_order_id}
+        )
         return self._parse_order_response(data, client_order_id)
 
     async def get_balance(self, asset: str) -> float:
         base = self.BASE_URL_TESTNET if self._testnet else self.BASE_URL_FUTURES
         endpoint = "/fapi/v2/balance"
-        
+
         if self._rate_lim:
             await self._rate_lim.acquire(endpoint)
 
@@ -214,7 +211,7 @@ class BinanceExchange(BaseExchange):
     async def get_position(self, symbol: str) -> Optional[Any]:
         base = self.BASE_URL_TESTNET if self._testnet else self.BASE_URL_FUTURES
         endpoint = "/fapi/v2/positionRisk"
-        
+
         if self._rate_lim:
             await self._rate_lim.acquire(endpoint)
 
@@ -229,23 +226,22 @@ class BinanceExchange(BaseExchange):
         """Set pengali leverage Futures-M sebelum trade."""
         base = self.BASE_URL_TESTNET if self._testnet else self.BASE_URL_FUTURES
         endpoint = "/fapi/v1/leverage"
-        
+
         if self._rate_lim:
             await self._rate_lim.acquire(endpoint)
-            
-        data = await self._signed_request("POST", f"{base}{endpoint}", {
-            "symbol": symbol,
-            "leverage": leverage
-        })
+
+        data = await self._signed_request(
+            "POST", f"{base}{endpoint}", {"symbol": symbol, "leverage": leverage}
+        )
         return data.get("leverage") == leverage
 
     async def get_open_orders(self, symbol: str | None = None) -> list[OrderResponse]:
         base = self.BASE_URL_TESTNET if self._testnet else self.BASE_URL_FUTURES
         endpoint = "/fapi/v1/openOrders"
-        
+
         if self._rate_lim:
             await self._rate_lim.acquire(endpoint)
-            
+
         params = {}
         if symbol:
             params["symbol"] = symbol

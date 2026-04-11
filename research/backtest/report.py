@@ -61,6 +61,7 @@ def compare_is_oos(
     Bandingkan In-Sample vs Out-of-Sample.
     Degradasi > max_degradation_pct = overfitting.
     """
+
     def _degrade(is_val: float, oos_val: float) -> float:
         if is_val == 0:
             return 0.0
@@ -106,13 +107,10 @@ def compare_is_oos(
 
     if is_overfit:
         log.warning(
-            f"⚠️ OVERFITTING: Sharpe degradasi {sharpe_degrade:.1f}% "
-            f"(>{max_degradation_pct}%)"
+            f"⚠️ OVERFITTING: Sharpe degradasi {sharpe_degrade:.1f}% " f"(>{max_degradation_pct}%)"
         )
     else:
-        log.info(
-            f"✅ IS vs OOS comparison OK: Sharpe degradasi {sharpe_degrade:.1f}%"
-        )
+        log.info(f"✅ IS vs OOS comparison OK: Sharpe degradasi {sharpe_degrade:.1f}%")
 
     return comparison
 
@@ -121,9 +119,9 @@ def format_summary(metrics: BacktestMetrics, title: str = "Backtest") -> str:
     """Format ringkasan human-readable untuk console/notifikasi."""
     status = "✅ DEPLOY READY" if metrics.deploy_ready else "❌ NOT READY"
     lines = [
-        f"╔══════════════════════════════════════╗",
+        "╔══════════════════════════════════════╗",
         f"║ {title:^36} ║",
-        f"╠══════════════════════════════════════╣",
+        "╠══════════════════════════════════════╣",
         f"║ ROI          : {metrics.total_roi_pct:>+8.2f}%            ║",
         f"║ CAGR         : {metrics.cagr_pct:>+8.2f}%            ║",
         f"║ Max Drawdown : {metrics.max_drawdown_pct:>8.2f}%            ║",
@@ -135,8 +133,8 @@ def format_summary(metrics: BacktestMetrics, title: str = "Backtest") -> str:
         f"║ Avg R:R      : {metrics.avg_rr:>8.2f}             ║",
         f"║ Total Trades : {metrics.total_trades:>8d}             ║",
         f"║ Max Consec L : {metrics.max_consecutive_loss:>8d}             ║",
-        f"╠══════════════════════════════════════╣",
+        "╠══════════════════════════════════════╣",
         f"║ {status:^36} ║",
-        f"╚══════════════════════════════════════╝",
+        "╚══════════════════════════════════════╝",
     ]
     return "\n".join(lines)

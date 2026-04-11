@@ -11,8 +11,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-import aiosqlite
-
 from runtime.agent.trade_layer.db import DatabaseManager
 from runtime.agent.trade_layer.trade import Trade
 from runtime.shared.utils import utcnow  # type: ignore
@@ -93,7 +91,7 @@ class AuditTrail:
             "SELECT * FROM audit_events WHERE trade_id = ? ORDER BY timestamp ASC", (trade_id,)
         )
         rows = await cursor.fetchall()
-        
+
         for row in rows:
             ts = datetime.fromisoformat(row["timestamp"])
             events.append(
@@ -121,7 +119,7 @@ class AuditTrail:
 
         cursor = await conn.execute(query, params)
         rows = await cursor.fetchall()
-        
+
         for row in rows:
             computed = self._generate_checksum(
                 row["event_id"],

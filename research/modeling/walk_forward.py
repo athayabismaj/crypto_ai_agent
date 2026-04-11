@@ -20,10 +20,10 @@ log = logging.getLogger(__name__)
 @dataclass
 class WalkForwardConfig:
     n_splits: int = 5
-    gap_periods: int = 4        # candle gap antara train & val
-    rolling: bool = False       # False = expanding window
+    gap_periods: int = 4  # candle gap antara train & val
+    rolling: bool = False  # False = expanding window
     min_train_size: int = 1000  # minimum candle untuk training
-    val_size_pct: float = 0.0   # 0 = auto-calculate dari n_splits
+    val_size_pct: float = 0.0  # 0 = auto-calculate dari n_splits
 
 
 @dataclass
@@ -31,10 +31,10 @@ class FoldResult:
     fold: int
     train_size: int
     val_size: int
-    ic: float           # Spearman correlation pred vs actual
+    ic: float  # Spearman correlation pred vs actual
     mse: float
     dir_accuracy: float  # % predicted direction correct
-    sharpe: float        # signal Sharpe
+    sharpe: float  # signal Sharpe
     predictions: np.ndarray = field(default=None, repr=False)
     actuals: np.ndarray = field(default=None, repr=False)
 
@@ -44,7 +44,7 @@ class WalkForwardSummary:
     n_folds: int
     ic_mean: float
     ic_std: float
-    icir: float          # IC mean / IC std (stabilitas)
+    icir: float  # IC mean / IC std (stabilitas)
     dir_accuracy_mean: float
     sharpe_mean: float
     mse_mean: float
@@ -150,9 +150,7 @@ def walk_forward_cv(
         )
         results.append(fold_result)
 
-        log.info(
-            f"  → IC={fold_result.ic:.4f}, DirAcc={dir_acc:.1f}%, Sharpe={sharpe:.2f}"
-        )
+        log.info(f"  → IC={fold_result.ic:.4f}, DirAcc={dir_acc:.1f}%, Sharpe={sharpe:.2f}")
 
     return results
 
@@ -161,8 +159,13 @@ def aggregate_results(results: list[FoldResult]) -> WalkForwardSummary:
     """Agregasi hasil dari semua fold menjadi summary."""
     if not results:
         return WalkForwardSummary(
-            n_folds=0, ic_mean=0, ic_std=0, icir=0,
-            dir_accuracy_mean=0, sharpe_mean=0, mse_mean=0,
+            n_folds=0,
+            ic_mean=0,
+            ic_std=0,
+            icir=0,
+            dir_accuracy_mean=0,
+            sharpe_mean=0,
+            mse_mean=0,
             fold_results=[],
         )
 

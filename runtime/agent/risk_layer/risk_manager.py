@@ -130,9 +130,7 @@ class RiskManager:
                 f"CapitalManager: Trading halted. "
                 f"Warnings: {'; '.join(capital_status.warnings)}"
             )
-            return self._finalize(
-                RiskVerdict.BLOCKED, request, reasons=[reason], warnings=warnings
-            )
+            return self._finalize(RiskVerdict.BLOCKED, request, reasons=[reason], warnings=warnings)
 
         # Update internal equity state dari CapitalManager
         self._current_equity = capital_status.current_equity
@@ -206,9 +204,7 @@ class RiskManager:
                 warnings=warnings,
             )
 
-        qty, qty_warn, risk_usd = self.position_sizer.calculate(
-            request, equity, portfolio_state
-        )
+        qty, qty_warn, risk_usd = self.position_sizer.calculate(request, equity, portfolio_state)
         warnings.extend(qty_warn)
 
         if qty <= 0:

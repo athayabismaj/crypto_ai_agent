@@ -30,11 +30,13 @@ def get_gain_importance(model: Any, feature_names: list[str]) -> pd.DataFrame:
     if total == 0:
         total = 1  # avoid div zero
 
-    df = pd.DataFrame({
-        "feature": feature_names[:len(importances)],
-        "importance": importances,
-        "importance_pct": importances / total * 100,
-    })
+    df = pd.DataFrame(
+        {
+            "feature": feature_names[: len(importances)],
+            "importance": importances,
+            "importance_pct": importances / total * 100,
+        }
+    )
     df = df.sort_values("importance", ascending=False).reset_index(drop=True)
     return df
 
@@ -52,15 +54,15 @@ def get_permutation_importance(
     """
     from sklearn.inspection import permutation_importance
 
-    result = permutation_importance(
-        model, X, y, n_repeats=n_repeats, random_state=42, n_jobs=-1
-    )
+    result = permutation_importance(model, X, y, n_repeats=n_repeats, random_state=42, n_jobs=-1)
 
-    df = pd.DataFrame({
-        "feature": feature_names,
-        "importance_mean": result.importances_mean,
-        "importance_std": result.importances_std,
-    })
+    df = pd.DataFrame(
+        {
+            "feature": feature_names,
+            "importance_mean": result.importances_mean,
+            "importance_std": result.importances_std,
+        }
+    )
     df = df.sort_values("importance_mean", ascending=False).reset_index(drop=True)
     return df
 

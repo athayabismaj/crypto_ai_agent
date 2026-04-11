@@ -50,7 +50,9 @@ class ExitManager:
         self.take_profit = take_profit or TakeProfitManager(config)
         self.break_even = break_even or BreakEvenManager(config)
         self.max_hold_candles: int = getattr(
-            config, "max_hold_candles", DEFAULT_MAX_HOLD_CANDLES,
+            config,
+            "max_hold_candles",
+            DEFAULT_MAX_HOLD_CANDLES,
         )
 
     # ── Public API ────────────────────────────────────────────────
@@ -136,11 +138,9 @@ class ExitManager:
         )
         if trail is not None:
             if trail.action == ExitAction.EXIT_TRAIL:
-                logger.warning("[ExitManager] Trail SL hit: %s %s",
-                               symbol, trail.reason)
+                logger.warning("[ExitManager] Trail SL hit: %s %s", symbol, trail.reason)
             else:
-                logger.info("[ExitManager] Trail updated: %s %s",
-                            symbol, trail.reason)
+                logger.info("[ExitManager] Trail updated: %s %s", symbol, trail.reason)
             return trail
 
         # ── L5: Partial TP sudah dihandle di L2 oleh TakeProfitManager
@@ -152,8 +152,7 @@ class ExitManager:
             urgency = getattr(strategy_exit, "urgency", "normal")
             confidence = getattr(strategy_exit, "confidence", 0.0)
             exit_price = getattr(strategy_exit, "exit_price", 0.0)
-            logger.info("[ExitManager] Strategy exit: %s reason=%s",
-                        symbol, reason)
+            logger.info("[ExitManager] Strategy exit: %s reason=%s", symbol, reason)
             return ExitDecision(
                 action=ExitAction.EXIT_SIGNAL,
                 exit_price=exit_price,
@@ -168,8 +167,7 @@ class ExitManager:
         # ── L7: Timeout ──────────────────────────────────────────
         timeout = self._check_timeout(hold_candles)
         if timeout is not None:
-            logger.info("[ExitManager] Timeout: %s after %d candles",
-                        symbol, hold_candles)
+            logger.info("[ExitManager] Timeout: %s after %d candles", symbol, hold_candles)
             return timeout
 
         # ── HOLD — tidak ada aksi ────────────────────────────────
@@ -203,22 +201,21 @@ class ExitManager:
         for trade in trades:
             trade_id = getattr(trade, "trade_id", "")
             side = getattr(trade, "side", "BUY")
-            entry = getattr(trade, "avg_fill_price",
-                            getattr(trade, "entry_price", 0.0))
-            sl = getattr(trade, "stop_loss",
-                         getattr(trade, "sl_price", 0.0))
-            tp = getattr(trade, "take_profit",
-                         getattr(trade, "tp_price", 0.0))
+            entry = getattr(trade, "avg_fill_price", getattr(trade, "entry_price", 0.0))
+            sl = getattr(trade, "stop_loss", getattr(trade, "sl_price", 0.0))
+            tp = getattr(trade, "take_profit", getattr(trade, "tp_price", 0.0))
             if trade_id:
                 self.register_trade(trade_id, side, entry, sl, tp)
-        logger.info("[ExitManager] Registered %d open positions for recovery",
-                    len(trades))
+        logger.info("[ExitManager] Registered %d open positions for recovery", len(trades))
 
     # ── Private ───────────────────────────────────────────────────
 
     @staticmethod
     def _check_sl(
-        side: str, sl_price: float, high: float, low: float,
+        side: str,
+        sl_price: float,
+        high: float,
+        low: float,
     ) -> ExitDecision | None:
         """SL check menggunakan candle high/low, bukan hanya close.
 

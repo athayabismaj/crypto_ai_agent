@@ -13,26 +13,18 @@ Mengikuti checklist docs section 14.3.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
-from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from runtime.agent.models.enums import AlertSeverity
 from runtime.agent.models.monitoring import (
     Alert,
-    BalanceSyncReport,
     Discrepancy,
-    OrderSyncReport,
-    PositionSyncReport,
-    ReconciliationReport,
 )
 from runtime.agent.sync.balance_sync import BalanceSync
-from runtime.agent.sync.order_sync import OrderSync, OrderNotFoundError
+from runtime.agent.sync.order_sync import OrderNotFoundError, OrderSync
 from runtime.agent.sync.position_sync import PositionSync
 from runtime.agent.sync.reconciliation import Reconciliation
-
 
 # ══════════════════════════════════════════════════════════════════════
 #  Mocks
@@ -80,8 +72,7 @@ class MockOrderExchange:
     def __init__(self, statuses: dict[str, dict] | None = None):
         self._statuses = statuses or {}
 
-    async def get_order_status(self, symbol: str,
-                               client_order_id: str) -> dict:
+    async def get_order_status(self, symbol: str, client_order_id: str) -> dict:
         if client_order_id in self._statuses:
             return self._statuses[client_order_id]
         raise OrderNotFoundError(f"Order {client_order_id} not found")
@@ -97,9 +88,9 @@ class MockTradeStore:
     def get_pending_trades(self) -> list[dict]:
         return self._trades
 
-    def update_trade_status(self, trade_id: str, status: str,
-                            filled_qty: float = 0.0,
-                            avg_price: float = 0.0) -> None:
+    def update_trade_status(
+        self, trade_id: str, status: str, filled_qty: float = 0.0, avg_price: float = 0.0
+    ) -> None:
         self.status_updates.append((trade_id, status, filled_qty, avg_price))
 
 
@@ -214,7 +205,8 @@ class TestBalanceSync:
         capital = MockCapital(equity=10000.0)
         alert_mgr = MockAlertManager()
         sync = BalanceSync(
-            exchange=exchange, capital=capital,
+            exchange=exchange,
+            capital=capital,
             alert_manager=alert_mgr,
         )
 
@@ -231,7 +223,8 @@ class TestBalanceSync:
         capital = MockCapital(equity=10000.0)
         alert_mgr = MockAlertManager()
         sync = BalanceSync(
-            exchange=exchange, capital=capital,
+            exchange=exchange,
+            capital=capital,
             alert_manager=alert_mgr,
         )
 
@@ -267,13 +260,21 @@ class TestOrderSync:
     @pytest.mark.asyncio
     async def test_sync_filled_order(self):
         """FILLED → update trade status to open."""
-        exchange = MockOrderExchange(statuses={
-            "ORD-001": {"status": "FILLED", "filled_qty": 0.001, "avg_price": 50000},
-        })
-        store = MockTradeStore(trades=[
-            {"trade_id": "T1", "symbol": "BTCUSDT",
-             "client_order_id": "ORD-001", "status": "submitted"},
-        ])
+        exchange = MockOrderExchange(
+            statuses={
+                "ORD-001": {"status": "FILLED", "filled_qty": 0.001, "avg_price": 50000},
+            }
+        )
+        store = MockTradeStore(
+            trades=[
+                {
+                    "trade_id": "T1",
+                    "symbol": "BTCUSDT",
+                    "client_order_id": "ORD-001",
+                    "status": "submitted",
+                },
+            ]
+        )
         sync = OrderSync(exchange=exchange, store=store)
 
         report = await sync.run()
@@ -286,13 +287,21 @@ class TestOrderSync:
     @pytest.mark.asyncio
     async def test_sync_cancelled_order(self):
         """CANCELLED → mark as cancelled, don't retry."""
-        exchange = MockOrderExchange(statuses={
-            "ORD-002": {"status": "CANCELLED"},
-        })
-        store = MockTradeStore(trades=[
-            {"trade_id": "T2", "symbol": "BTCUSDT",
-             "client_order_id": "ORD-002", "status": "submitted"},
-        ])
+        exchange = MockOrderExchange(
+            statuses={
+                "ORD-002": {"status": "CANCELLED"},
+            }
+        )
+        store = MockTradeStore(
+            trades=[
+                {
+                    "trade_id": "T2",
+                    "symbol": "BTCUSDT",
+                    "client_order_id": "ORD-002",
+                    "status": "submitted",
+                },
+            ]
+        )
         sync = OrderSync(exchange=exchange, store=store)
 
         report = await sync.run()
@@ -303,14 +312,21 @@ class TestOrderSync:
     @pytest.mark.asyncio
     async def test_sync_partial_fill(self):
         """PARTIALLY_FILLED → update qty and status."""
-        exchange = MockOrderExchange(statuses={
-            "ORD-003": {"status": "PARTIALLY_FILLED",
-                        "filled_qty": 0.0005, "avg_price": 49800},
-        })
-        store = MockTradeStore(trades=[
-            {"trade_id": "T3", "symbol": "BTCUSDT",
-             "client_order_id": "ORD-003", "status": "submitted"},
-        ])
+        exchange = MockOrderExchange(
+            statuses={
+                "ORD-003": {"status": "PARTIALLY_FILLED", "filled_qty": 0.0005, "avg_price": 49800},
+            }
+        )
+        store = MockTradeStore(
+            trades=[
+                {
+                    "trade_id": "T3",
+                    "symbol": "BTCUSDT",
+                    "client_order_id": "ORD-003",
+                    "status": "submitted",
+                },
+            ]
+        )
         sync = OrderSync(exchange=exchange, store=store)
 
         report = await sync.run()
@@ -322,10 +338,16 @@ class TestOrderSync:
     async def test_order_not_found_conflict(self):
         """Order tidak ditemukan → conflict, bukan crash."""
         exchange = MockOrderExchange(statuses={})
-        store = MockTradeStore(trades=[
-            {"trade_id": "T4", "symbol": "BTCUSDT",
-             "client_order_id": "ORD-MISSING", "status": "submitted"},
-        ])
+        store = MockTradeStore(
+            trades=[
+                {
+                    "trade_id": "T4",
+                    "symbol": "BTCUSDT",
+                    "client_order_id": "ORD-MISSING",
+                    "status": "submitted",
+                },
+            ]
+        )
         sync = OrderSync(exchange=exchange, store=store)
 
         report = await sync.run()
@@ -357,13 +379,16 @@ class TestPositionSync:
     @pytest.mark.asyncio
     async def test_ghost_position_detected(self):
         """#15: GHOST_POSITION terdeteksi dan trigger alert CRITICAL."""
-        exchange = MockPositionExchange(positions={
-            "BTCUSDT": {"qty": 0.001, "side": "BUY", "entry_price": 50000},
-        })
+        exchange = MockPositionExchange(
+            positions={
+                "BTCUSDT": {"qty": 0.001, "side": "BUY", "entry_price": 50000},
+            }
+        )
         store = MockPositionStore(positions={})  # internal kosong
         alert_mgr = MockAlertManager()
         sync = PositionSync(
-            exchange=exchange, store=store,
+            exchange=exchange,
+            store=store,
             alert_manager=alert_mgr,
         )
 
@@ -379,9 +404,11 @@ class TestPositionSync:
     async def test_zombie_position_detected(self):
         """#16: ZOMBIE_POSITION di-mark CLOSED di internal."""
         exchange = MockPositionExchange(positions={})  # exchange kosong
-        store = MockPositionStore(positions={
-            "ETHUSDT": {"trade_id": "T1", "filled_qty": 0.01, "side": "BUY"},
-        })
+        store = MockPositionStore(
+            positions={
+                "ETHUSDT": {"trade_id": "T1", "filled_qty": 0.01, "side": "BUY"},
+            }
+        )
         sync = PositionSync(exchange=exchange, store=store)
 
         report = await sync.run()
@@ -394,12 +421,16 @@ class TestPositionSync:
     @pytest.mark.asyncio
     async def test_qty_mismatch_detected(self):
         """QTY berbeda > 1% → MEDIUM discrepancy."""
-        exchange = MockPositionExchange(positions={
-            "BTCUSDT": {"qty": 0.0012, "side": "BUY"},
-        })
-        store = MockPositionStore(positions={
-            "BTCUSDT": {"trade_id": "T1", "filled_qty": 0.001, "side": "BUY"},
-        })
+        exchange = MockPositionExchange(
+            positions={
+                "BTCUSDT": {"qty": 0.0012, "side": "BUY"},
+            }
+        )
+        store = MockPositionStore(
+            positions={
+                "BTCUSDT": {"trade_id": "T1", "filled_qty": 0.001, "side": "BUY"},
+            }
+        )
         sync = PositionSync(exchange=exchange, store=store)
 
         report = await sync.run()
@@ -410,12 +441,16 @@ class TestPositionSync:
     @pytest.mark.asyncio
     async def test_no_discrepancies(self):
         """Semua cocok → no discrepancies."""
-        exchange = MockPositionExchange(positions={
-            "BTCUSDT": {"qty": 0.001, "side": "BUY"},
-        })
-        store = MockPositionStore(positions={
-            "BTCUSDT": {"trade_id": "T1", "filled_qty": 0.001, "side": "BUY"},
-        })
+        exchange = MockPositionExchange(
+            positions={
+                "BTCUSDT": {"qty": 0.001, "side": "BUY"},
+            }
+        )
+        store = MockPositionStore(
+            positions={
+                "BTCUSDT": {"trade_id": "T1", "filled_qty": 0.001, "side": "BUY"},
+            }
+        )
         sync = PositionSync(exchange=exchange, store=store)
 
         report = await sync.run()
@@ -492,8 +527,7 @@ class TestReconciliation:
         """Discrepancies → issue reported."""
         provider = MockReconciliationProvider(
             discrepancies=[
-                Discrepancy(type="GHOST_POSITION", symbol="BTCUSDT",
-                            severity="CRITICAL"),
+                Discrepancy(type="GHOST_POSITION", symbol="BTCUSDT", severity="CRITICAL"),
             ],
         )
         reconciler = Reconciliation(

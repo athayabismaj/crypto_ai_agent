@@ -93,8 +93,7 @@ class ExposureControl:
         total_exposure_pct = (total_current + new_notional) / equity
         if total_exposure_pct > self.max_total:
             return False, (
-                f"Total exposure {total_exposure_pct:.1%} "
-                f"> max {self.max_total:.1%}"
+                f"Total exposure {total_exposure_pct:.1%} " f"> max {self.max_total:.1%}"
             )
 
         return True, ""

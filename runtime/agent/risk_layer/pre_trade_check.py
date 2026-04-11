@@ -13,8 +13,8 @@ Filosofi:
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 from datetime import datetime, timezone
 
 from runtime.agent.core.config_schema import AgentConfig  # type: ignore
@@ -137,7 +137,9 @@ class PreTradeCheck:
 
         # 3. Quantity
         ok = request.quantity >= self.min_qty
-        results.append(("quantity", ok, "" if ok else f"Qty {request.quantity} < min {self.min_qty}"))
+        results.append(
+            ("quantity", ok, "" if ok else f"Qty {request.quantity} < min {self.min_qty}")
+        )
 
         # 4. Price
         if request.price < 0:

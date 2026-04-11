@@ -112,9 +112,13 @@ class RecoveryManager:
             if hasattr(self._safe_mode, "emergency_stop"):
                 # if emergency stop is async we wait for it
                 if __import__("inspect").iscoroutinefunction(self._safe_mode.emergency_stop):
-                    await self._safe_mode.emergency_stop("Recovery Failed! DB state dan Exchange asinkron.")
+                    await self._safe_mode.emergency_stop(
+                        "Recovery Failed! DB state dan Exchange asinkron."
+                    )
                 else:
-                    self._safe_mode.emergency_stop("Recovery Failed! DB state dan Exchange asinkron.")
+                    self._safe_mode.emergency_stop(
+                        "Recovery Failed! DB state dan Exchange asinkron."
+                    )
 
         return RecoveryReport(
             total_checked=len(active_trades),
