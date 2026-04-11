@@ -1,1098 +1,762 @@
-**crypto_ai_agent**
+# crypto_ai_agent — Research Layer Documentation
 
-**Dokumentasi Layer: Research**
+*Complete implementation guide — interface contracts, config, data flow, design decisions*
 
-*Panduan implementasi lengkap --- interface contract, config, data flow, keputusan desain*
+**Version 1.0** | Reference: crypto_ai_agent final structure
 
-Versi 1.0 \| Referensi: struktur final crypto_ai_agent
+---
 
-  ------------------------------------------------
+## 1. Overview — Research Layer
 
-  ------------------------------------------------
+The Research Layer is an offline experimentation zone that is completely separate from the live system. No code here can execute real orders. The outputs of this layer are:
 
-**1. Overview --- Research Layer**
+- Trained ML models (`.pkl`) ready to deploy to `runtime/agent/models/`
+- Complete backtest reports: ROI, drawdown, Sharpe, win rate
+- Optimal config from the walk-forward & optimization process
+- Clean datasets & validated features
 
-Research Layer adalah zona eksperimen offline yang sepenuhnya terpisah dari sistem live. Tidak ada kode di sini yang bisa mengeksekusi order sungguhan. Output layer ini adalah:
+> **HARD RULE:** No imports from `runtime/` inside `research/`. The dependency must be one-directional: research produces artifacts → runtime consumes artifacts.
 
-> **•** Model ML terlatih (.pkl) yang siap di-deploy ke runtime/agent/models/
->
-> **•** Laporan backtest lengkap: ROI, drawdown, Sharpe, win rate
->
-> **•** Config optimal dari proses walk-forward & optimasi
->
-> **•** Dataset bersih & fitur yang sudah divalidasi
+---
 
-  --------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **ATURAN KERAS:** Tidak ada impor dari runtime/ di dalam research/. Dependency harus satu arah: research menghasilkan artefak → runtime mengonsumsi artefak.
+### 1.1 Folder Structure
 
-  --------------------------------------------------------------------------------------------------------------------------------------------------------------
+```
+research/
+├── data/
+│   ├── raw/                  ← output of fetch_data.py (immutable, do not edit)
+│   ├── processed/            ← output of clean_data.py
+│   ├── features/             ← output of feature_engineering.py
+│   └── orderbook_samples/    ← depth snapshots for realistic fill simulation
+├── pipeline/
+│   ├── fetch_data.py
+│   ├── clean_data.py
+│   ├── resample_data.py
+│   └── feature_engineering.py
+├── validation/
+│   ├── data_quality.py
+│   ├── leakage_check.py
+│   └── consistency_check.py
+├── modeling/
+│   ├── train.py
+│   ├── walk_forward.py
+│   ├── evaluate.py
+│   ├── model_registry.py
+│   └── feature_importance.py
+├── backtest/
+│   ├── engine.py
+│   ├── simulator.py
+│   ├── portfolio_simulator.py
+│   ├── orderbook_simulator.py
+│   ├── liquidity_model.py
+│   ├── execution_emulator.py
+│   ├── metrics.py
+│   └── report.py
+├── optimization/
+│   ├── tuner.py
+│   ├── grid_search.py
+│   └── bayesian_opt.py
+└── experiments/              ← notebooks & experiment notes
+```
 
-**1.1 Struktur Folder**
+---
 
-+---------------------------------------------------------------+
-| research/                                                     |
-|                                                               |
-| ├── data/                                                     |
-|                                                               |
-| │ ├── raw/ ← hasil fetch_data.py (immutable, jangan edit)     |
-|                                                               |
-| │ ├── processed/ ← hasil clean_data.py                        |
-|                                                               |
-| │ ├── features/ ← hasil feature_engineering.py                |
-|                                                               |
-| │ └── orderbook_samples/ ← depth snapshot untuk simulasi fill |
-|                                                               |
-| ├── pipeline/                                                 |
-|                                                               |
-| │ ├── fetch_data.py                                           |
-|                                                               |
-| │ ├── clean_data.py                                           |
-|                                                               |
-| │ ├── resample_data.py                                        |
-|                                                               |
-| │ └── feature_engineering.py                                  |
-|                                                               |
-| ├── validation/                                               |
-|                                                               |
-| │ ├── data_quality.py                                         |
-|                                                               |
-| │ ├── leakage_check.py                                        |
-|                                                               |
-| │ └── consistency_check.py                                    |
-|                                                               |
-| ├── modeling/                                                 |
-|                                                               |
-| │ ├── train.py                                                |
-|                                                               |
-| │ ├── walk_forward.py                                         |
-|                                                               |
-| │ ├── evaluate.py                                             |
-|                                                               |
-| │ ├── model_registry.py                                       |
-|                                                               |
-| │ └── feature_importance.py                                   |
-|                                                               |
-| ├── backtest/                                                 |
-|                                                               |
-| │ ├── engine.py                                               |
-|                                                               |
-| │ ├── simulator.py                                            |
-|                                                               |
-| │ ├── portfolio_simulator.py                                  |
-|                                                               |
-| │ ├── orderbook_simulator.py                                  |
-|                                                               |
-| │ ├── liquidity_model.py                                      |
-|                                                               |
-| │ ├── execution_emulator.py                                   |
-|                                                               |
-| │ ├── metrics.py                                              |
-|                                                               |
-| │ └── report.py                                               |
-|                                                               |
-| ├── optimization/                                             |
-|                                                               |
-| │ ├── tuner.py                                                |
-|                                                               |
-| │ ├── grid_search.py                                          |
-|                                                               |
-| │ └── bayesian_opt.py                                         |
-|                                                               |
-| └── experiments/ ← notebook & catatan eksperimen              |
-+---------------------------------------------------------------+
+### 1.2 Data Flow Between Sub-layers
 
-**1.2 Data Flow Antar Sub-layer**
+| Stage | Input | Process | Output | Required Validation |
+|---|---|---|---|---|
+| 1. Fetch | Exchange API / CSV | fetch_data.py | raw/*.parquet | data_quality.py |
+| 2. Clean | raw/*.parquet | clean_data.py | processed/*.parquet | consistency_check.py |
+| 3. Resample | processed/*.parquet | resample_data.py | processed/*_Xm.parquet | consistency_check.py |
+| 4. Feature | processed/*.parquet | feature_engineering.py | features/*.parquet | leakage_check.py |
+| 5. Train | features/*.parquet | train.py + walk_forward.py | models/*.pkl + metadata | evaluate.py |
+| 6. Backtest | features/ + orderbook_samples/ | engine.py + simulator.py | results/*.json + report | metrics.py (threshold check) |
+| 7. Optimize | results/*.json | tuner.py / bayesian_opt.py | best_params.json | re-run walk_forward |
+| 8. Deploy | models/*.pkl + best_params.json | deploy.py (automation/) | runtime/agent/models/*.pkl | metadata.json update |
 
-  -------------------------------------------------------------------------------------------------------------------------------------------
-  **Tahap**      **Input**                          **Proses**                   **Output**                    **Validasi wajib**
-  -------------- ---------------------------------- ---------------------------- ----------------------------- ------------------------------
-  1\. Fetch      Exchange API / CSV                 fetch_data.py                raw/\*.parquet                data_quality.py
+---
 
-  2\. Clean      raw/\*.parquet                     clean_data.py                processed/\*.parquet          consistency_check.py
+## 2. Pipeline — Data Acquisition & Preprocessing
 
-  3\. Resample   processed/\*.parquet               resample_data.py             processed/\*\_Xm.parquet      consistency_check.py
+### 2.1 fetch_data.py
 
-  4\. Feature    processed/\*.parquet               feature_engineering.py       features/\*.parquet           leakage_check.py
+Fetches OHLCV data, funding rates, and open interest from the exchange. Data is stored in Parquet format partitioned per symbol per timeframe.
 
-  5\. Train      features/\*.parquet                train.py + walk_forward.py   models/\*.pkl + metadata      evaluate.py
+**Public Interface**
 
-  6\. Backtest   features/ + orderbook_samples/     engine.py + simulator.py     results/\*.json + report      metrics.py (threshold check)
-
-  7\. Optimize   results/\*.json                    tuner.py / bayesian_opt.py   best_params.json              walk_forward ulang
-
-  8\. Deploy     models/\*.pkl + best_params.json   deploy.py (automation/)      runtime/agent/models/\*.pkl   metadata.json update
-  -------------------------------------------------------------------------------------------------------------------------------------------
-
-**2. Pipeline --- Akuisisi & Preprocessing Data**
-
-**2.1 fetch_data.py**
-
-Mengambil data OHLCV, funding rate, dan open interest dari exchange. Data disimpan dalam format Parquet partisi per simbol per timeframe.
-
-**Interface Publik**
-
-  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **Fungsi**               **Parameter**                                                                     **Return**                                              **Exception**
-  ------------------------ --------------------------------------------------------------------------------- ------------------------------------------------------- ----------------------------
-  fetch_ohlcv()            symbol: str, tf: str, start: datetime, end: datetime, exchange: str=\'binance\'   pd.DataFrame \[open,high,low,close,volume,timestamp\]   FetchError, RateLimitError
-
-  fetch_funding_rate()     symbol: str, start: datetime, end: datetime                                       pd.DataFrame \[timestamp, rate, next_time\]             FetchError
-
-  fetch_orderbook_snap()   symbol: str, depth: int=20, n_samples: int=500                                    list\[dict\] --- simpan ke orderbook_samples/           FetchError
-
-  save_raw()               df: pd.DataFrame, symbol: str, tf: str                                            Path --- lokasi file .parquet                           IOError
-  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Function | Parameters | Return | Exception |
+|---|---|---|---|
+| `fetch_ohlcv()` | symbol: str, tf: str, start: datetime, end: datetime, exchange: str='binance' | pd.DataFrame [open,high,low,close,volume,timestamp] | FetchError, RateLimitError |
+| `fetch_funding_rate()` | symbol: str, start: datetime, end: datetime | pd.DataFrame [timestamp, rate, next_time] | FetchError |
+| `fetch_orderbook_snap()` | symbol: str, depth: int=20, n_samples: int=500 | list[dict] — saves to orderbook_samples/ | FetchError |
+| `save_raw()` | df: pd.DataFrame, symbol: str, tf: str | Path — location of the .parquet file | IOError |
 
 **Config Keys**
 
-  ---------------------------------------------------------------------------------------------------
-  **Key**            **Default**         **Valid Range**           **Keterangan**
-  ------------------ ------------------- ------------------------- ----------------------------------
-  EXCHANGE           binance             binance \| bybit \| okx   Exchange sumber data
+| Key | Default | Valid Range | Description |
+|---|---|---|---|
+| `EXCHANGE` | binance | binance \| bybit \| okx | Source exchange for data |
+| `SYMBOLS` | ['BTCUSDT'] | list of str | Symbols to fetch |
+| `TIMEFRAMES` | ['1h','4h'] | 1m\|5m\|15m\|1h\|4h\|1d | Timeframes to retrieve |
+| `START_DATE` | 2020-01-01 | ISO datetime | Start of the fetch period |
+| `RATE_LIMIT_SLEEP` | 0.2 | 0.1–2.0 (seconds) | Delay between requests (avoid bans) |
+| `MAX_RETRY` | 3 | 1–10 | Retries on request failure |
+| `RAW_DIR` | data/raw/ | str path | Directory for raw data storage |
 
-  SYMBOLS            \[\'BTCUSDT\'\]     list of str               Simbol yang difetch
+**Design Decisions**
 
-  TIMEFRAMES         \[\'1h\',\'4h\'\]   1m\|5m\|15m\|1h\|4h\|1d   Timeframe yang diambil
+- Parquet format instead of CSV — 5–10x smaller, faster loading, schema enforced.
+- Raw files are **NEVER** edited after saving. If corrections are needed, save a new version.
+- Naming convention: `BTCUSDT_1h_20200101_20241231.parquet` — deterministic, easy to glob.
+- Rate limit sleep is configured, not hardcoded — each exchange has different limits.
 
-  START_DATE         2020-01-01          datetime ISO              Awal periode fetch
+---
 
-  RATE_LIMIT_SLEEP   0.2                 0.1 -- 2.0 (detik)        Jeda antar request (hindari ban)
+### 2.2 clean_data.py
 
-  MAX_RETRY          3                   1 -- 10                   Retry saat request gagal
+Cleans raw data: handles missing candles, price outliers, duplicate timestamps, and normalizes timezone to UTC.
 
-  RAW_DIR            data/raw/           str path                  Direktori simpan data mentah
-  ---------------------------------------------------------------------------------------------------
+**Public Interface**
 
-**Keputusan Desain**
-
-> **•** Format Parquet bukan CSV --- ukuran 5--10x lebih kecil, load lebih cepat, schema enforced.
->
-> **•** File raw TIDAK PERNAH diedit setelah disimpan. Jika ada koreksi, simpan versi baru.
->
-> **•** Naming convention: BTCUSDT_1h_20200101_20241231.parquet --- deterministic, easy glob.
->
-> **•** Rate limit sleep dikonfigurasi, bukan hardcode --- tiap exchange punya limit berbeda.
-
-**2.2 clean_data.py**
-
-Membersihkan data mentah: handle missing candle, outlier harga, duplikat timestamp, dan normalisasi timezone ke UTC.
-
-**Interface Publik**
-
-  -----------------------------------------------------------------------------------------------------------------------------------------------
-  **Fungsi**              **Parameter**                            **Return**                 **Catatan**
-  ----------------------- ---------------------------------------- -------------------------- ---------------------------------------------------
-  clean_ohlcv()           df: pd.DataFrame, symbol: str, tf: str   pd.DataFrame bersih        Forward-fill candle kosong max 3 berturut
-
-  remove_outliers()       df, z_thresh: float=4.0                  pd.DataFrame               Z-score pada log-return, bukan harga absolut
-
-  fix_timestamps()        df, tz: str=\'UTC\'                      pd.DataFrame               Konversi ke UTC, hapus duplikat
-
-  validate_ohlc_logic()   df: pd.DataFrame                         bool, list\[str\] errors   High \>= max(Open,Close), Low \<= min(Open,Close)
-  -----------------------------------------------------------------------------------------------------------------------------------------------
+| Function | Parameters | Return | Notes |
+|---|---|---|---|
+| `clean_ohlcv()` | df: pd.DataFrame, symbol: str, tf: str | Clean pd.DataFrame | Forward-fill up to 3 consecutive empty candles |
+| `remove_outliers()` | df, z_thresh: float=4.0 | pd.DataFrame | Z-score on log-return, not on absolute price |
+| `fix_timestamps()` | df, tz: str='UTC' | pd.DataFrame | Convert to UTC, remove duplicates |
+| `validate_ohlc_logic()` | df: pd.DataFrame | bool, list[str] errors | High >= max(Open,Close), Low <= min(Open,Close) |
 
 **Config Keys**
 
-  --------------------------------------------------------------------------------------------------------------------------
-  **Key**             **Default**       **Keterangan**
-  ------------------- ----------------- ------------------------------------------------------------------------------------
-  MAX_FFILL_CANDLES   3                 Max candle kosong yang di-forward-fill. Lebih dari ini → baris dihapus.
+| Key | Default | Description |
+|---|---|---|
+| `MAX_FFILL_CANDLES` | 3 | Max consecutive empty candles to forward-fill. Beyond this → row is deleted. |
+| `OUTLIER_Z_THRESH` | 4.0 | Z-score threshold on log-return. Z > threshold → outlier. Default 4 ≈ 0.003% of data. |
+| `MIN_CANDLE_VOLUME` | 0.0 | Volume 0 is allowed (can occur on illiquid pairs). Set > 0 to filter out. |
+| `PROCESSED_DIR` | data/processed/ | Output directory. |
 
-  OUTLIER_Z_THRESH    4.0               Threshold Z-score log-return. Z \> threshold → outlier. Default 4 = \~0.003% data.
+**Cleaning Rules That Must Be Consistent**
 
-  MIN_CANDLE_VOLUME   0.0               Volume 0 diizinkan (bisa terjadi di pair illiquid). Set \> 0 untuk filter.
+> **IMPORTANT:** Cleaning rules MUST be identical between training and runtime. If runtime applies different normalization, the model will receive a distribution it does not recognize.
 
-  PROCESSED_DIR       data/processed/   Output direktori.
-  --------------------------------------------------------------------------------------------------------------------------
+- Log-return is computed here as an outlier cross-check, but is **NOT** stored — `feature_engineering.py` recomputes it.
+- Duplicate timestamps: keep the first (not the last) — consistent with exchange behavior.
+- Gaps larger than `MAX_FFILL_CANDLES` are filled with NaN and then the row is deleted, not interpolated.
 
-**Aturan Cleaning yang Harus Konsisten**
+---
 
-  -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **PENTING:** Aturan cleaning HARUS identik antara training dan runtime. Jika runtime melakukan normalisasi berbeda, model akan menerima distribusi yang tidak dikenali.
+### 2.3 resample_data.py
 
-  -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Converts data timeframes: 1m → 5m, 1h → 4h, etc. Uses correct OHLC resampling (not a simple downsample).
 
-> **•** Log-return dihitung di sini sebagai cross-check outlier, tapi TIDAK disimpan --- feature_engineering.py yang menghitung ulang.
->
-> **•** Duplikat timestamp: ambil yang pertama (bukan last) --- konsisten dengan exchange behavior.
->
-> **•** Gap lebih dari MAX_FFILL_CANDLES diisi dengan NaN lalu row dihapus, bukan di-interpolate.
+**Public Interface**
 
-**2.3 resample_data.py**
+| Function | Parameters | Return |
+|---|---|---|
+| `resample_ohlcv()` | df: pd.DataFrame, source_tf: str, target_tf: str | pd.DataFrame at target timeframe |
+| `align_multi_tf()` | dfs: dict[str, pd.DataFrame] | dict[str, pd.DataFrame] — all aligned to the same index |
 
-Mengubah timeframe data: 1m → 5m, 1h → 4h, dst. Menggunakan OHLC resampling yang benar (bukan sekedar downsample).
+**OHLC Resampling Rules**
 
-**Interface Publik**
+```python
+Open   = first(open)    # first candle in the window
+High   = max(high)      # highest in the window
+Low    = min(low)       # lowest in the window
+Close  = last(close)    # last candle in the window
+Volume = sum(volume)    # total volume
 
-  ---------------------------------------------------------------------------------------------------------------------------------------
-  **Fungsi**         **Parameter**                                      **Return**
-  ------------------ -------------------------------------------------- -----------------------------------------------------------------
-  resample_ohlcv()   df: pd.DataFrame, source_tf: str, target_tf: str   pd.DataFrame pada target timeframe
+# Timestamp label: START of window, not end
+# Example: 4H candle at 08:00 = data from 08:00–11:59
+```
 
-  align_multi_tf()   dfs: dict\[str, pd.DataFrame\]                     dict\[str, pd.DataFrame\] --- semua di-align ke index yang sama
-  ---------------------------------------------------------------------------------------------------------------------------------------
+---
 
-**Aturan Resampling OHLC**
+### 2.4 feature_engineering.py
 
-+-----------------------------------------------------+
-| Open = first(open) \# candle pertama dalam window   |
-|                                                     |
-| High = max(high) \# tertinggi dalam window          |
-|                                                     |
-| Low = min(low) \# terendah dalam window             |
-|                                                     |
-| Close = last(close) \# candle terakhir dalam window |
-|                                                     |
-| Volume = sum(volume) \# total volume                |
-|                                                     |
-| \# Label timestamp: AWAL window, bukan akhir        |
-|                                                     |
-| \# Contoh: 4H candle jam 08:00 = data 08:00--11:59  |
-+-----------------------------------------------------+
+Computes all features required by the ML model. Output is a DataFrame with feature columns + target label (return N candles forward).
 
-**2.4 feature_engineering.py**
+**Feature Categories**
 
-Menghitung semua fitur yang dibutuhkan model ML. Output adalah DataFrame dengan kolom fitur + label target (return N candle ke depan).
+| Category | Features | Formula / Library | Notes |
+|---|---|---|---|
+| Price action | log_return, log_return_N | np.log(close/close.shift(N)) | N = 1, 5, 20 |
+| Momentum | RSI, MOM, ROC | ta-lib / pandas-ta | Period: 7, 14, 21 |
+| Trend | EMA_fast, EMA_slow, MACD | ta-lib | EMA 9/21/50/200 |
+| Volatility | ATR, BB_width, realized_vol | ta-lib / rolling std log_return | ATR period 14 |
+| Volume | volume_ratio, OBV, VWAP | volume/volume.rolling(20).mean() | VWAP per day |
+| Regime | adx, trend_strength | ADX ta-lib period 14 | ADX > 25 = trending |
+| Funding | funding_rate, funding_cum8h | merge from fetch_funding_rate() | Futures only |
+| Target | target_return_Nh | log_return.shift(-N) | N = 1, 4, 8 candles |
 
-**Kategori Fitur**
+**Public Interface**
 
-  ------------------------------------------------------------------------------------------------------
-  **Kategori**   **Fitur**                     **Formula / Library**              **Catatan**
-  -------------- ----------------------------- ---------------------------------- ----------------------
-  Price action   log_return, log_return_N      np.log(close/close.shift(N))       N = 1, 5, 20
+| Function | Parameters | Return | Exception |
+|---|---|---|---|
+| `build_features()` | df: pd.DataFrame, config: FeatureConfig | pd.DataFrame with all features | InsufficientDataError |
+| `add_target()` | df, horizon: int, col: str='close' | pd.DataFrame + target column | — |
+| `validate_no_leakage()` | df: pd.DataFrame | bool | DataLeakageError |
+| `get_feature_names()` | config: FeatureConfig | list[str] | — |
 
-  Momentum       RSI, MOM, ROC                 ta-lib / pandas-ta                 Period: 7, 14, 21
+**FeatureConfig — Dataclass**
 
-  Trend          EMA_fast, EMA_slow, MACD      ta-lib                             EMA 9/21/50/200
+```python
+@dataclass
+class FeatureConfig:
+    rsi_periods:      list[int] = (7, 14, 21)
+    ema_periods:      list[int] = (9, 21, 50, 200)
+    atr_period:       int       = 14
+    bb_period:        int       = 20
+    volume_ma_period: int       = 20
+    target_horizons:  list[int] = (1, 4, 8)    # candles forward
+    include_funding:  bool      = False          # True for futures
+    drop_na:          bool      = True
+```
 
-  Volatility     ATR, BB_width, realized_vol   ta-lib / rolling std log_return    ATR period 14
+> **CRITICAL — Anti Leakage:** The target label (`target_return_Nh`) MUST use `shift(-N)` and must be validated AFTER all features are computed. Never use future data inside features.
 
-  Volume         volume_ratio, OBV, VWAP       volume/volume.rolling(20).mean()   VWAP per hari
+---
 
-  Regime         adx, trend_strength           ADX ta-lib period 14               ADX \> 25 = trending
+## 3. Validation — Data Quality Assurance
 
-  Funding        funding_rate, funding_cum8h   merge dari fetch_funding_rate()    Futures only
+### 3.1 data_quality.py
 
-  Target         target_return_Nh              log_return.shift(-N)               N = 1, 4, 8 candle
-  ------------------------------------------------------------------------------------------------------
+The first validation layer: check completeness, value ranges, and basic statistics before data is processed further.
 
-**Interface Publik**
+**Public Interface**
 
-  -----------------------------------------------------------------------------------------------------------------------
-  **Fungsi**              **Parameter**                             **Return**                    **Exception**
-  ----------------------- ----------------------------------------- ----------------------------- -----------------------
-  build_features()        df: pd.DataFrame, config: FeatureConfig   pd.DataFrame semua fitur      InsufficientDataError
-
-  add_target()            df, horizon: int, col: str=\'close\'      pd.DataFrame + kolom target   ---
-
-  validate_no_leakage()   df: pd.DataFrame                          bool                          DataLeakageError
-
-  get_feature_names()     config: FeatureConfig                     list\[str\]                   ---
-  -----------------------------------------------------------------------------------------------------------------------
-
-**FeatureConfig --- Dataclass**
-
-+-------------------------------------------------------------+
-| \@dataclass                                                 |
-|                                                             |
-| class FeatureConfig:                                        |
-|                                                             |
-| rsi_periods: list\[int\] = (7, 14, 21)                      |
-|                                                             |
-| ema_periods: list\[int\] = (9, 21, 50, 200)                 |
-|                                                             |
-| atr_period: int = 14                                        |
-|                                                             |
-| bb_period: int = 20                                         |
-|                                                             |
-| volume_ma_period: int = 20                                  |
-|                                                             |
-| target_horizons: list\[int\] = (1, 4, 8) \# candle ke depan |
-|                                                             |
-| include_funding: bool = False \# True untuk futures         |
-|                                                             |
-| drop_na: bool = True                                        |
-+-------------------------------------------------------------+
-
-  ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **KRITIS --- Anti Leakage:** Target label (target_return_Nh) wajib menggunakan shift(-N) dan harus divalidasi SETELAH semua fitur dihitung. Jangan pernah menggunakan future data di dalam fitur.
-
-  ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-**3. Validation --- Jaminan Kualitas Data**
-
-**3.1 data_quality.py**
-
-Lapisan pertama validasi: cek kelengkapan, range nilai, dan statistik dasar sebelum data diproses lebih lanjut.
-
-**Interface Publik**
-
-  --------------------------------------------------------------------------------------------------------------------
-  **Fungsi**             **Parameter**                            **Return**
-  ---------------------- ---------------------------------------- ----------------------------------------------------
-  run_quality_report()   df: pd.DataFrame, symbol: str, tf: str   QualityReport dataclass (lihat di bawah)
-
-  check_missing()        df: pd.DataFrame                         dict\[col, missing_pct\] --- pct missing per kolom
-
-  check_price_range()    df: pd.DataFrame, symbol: str            bool, list\[str\] anomalies
-
-  check_candle_gaps()    df: pd.DataFrame, tf: str                list\[datetime\] --- timestamp gap yang ditemukan
-  --------------------------------------------------------------------------------------------------------------------
+| Function | Parameters | Return |
+|---|---|---|
+| `run_quality_report()` | df: pd.DataFrame, symbol: str, tf: str | QualityReport dataclass (see below) |
+| `check_missing()` | df: pd.DataFrame | dict[col, missing_pct] — missing pct per column |
+| `check_price_range()` | df: pd.DataFrame, symbol: str | bool, list[str] anomalies |
+| `check_candle_gaps()` | df: pd.DataFrame, tf: str | list[datetime] — gap timestamps found |
 
 **QualityReport Dataclass**
 
-+-----------------------------------------------------+
-| \@dataclass                                         |
-|                                                     |
-| class QualityReport:                                |
-|                                                     |
-| symbol: str                                         |
-|                                                     |
-| timeframe: str                                      |
-|                                                     |
-| total_rows: int                                     |
-|                                                     |
-| missing_pct: dict\[str, float\] \# per kolom        |
-|                                                     |
-| gap_count: int \# jumlah gap candle                 |
-|                                                     |
-| outlier_count: int                                  |
-|                                                     |
-| ohlc_logic_errors: int \# High \< Low, dll          |
-|                                                     |
-| passed: bool \# True jika semua threshold terpenuhi |
-|                                                     |
-| warnings: list\[str\]                               |
-+-----------------------------------------------------+
+```python
+@dataclass
+class QualityReport:
+    symbol:            str
+    timeframe:         str
+    total_rows:        int
+    missing_pct:       dict[str, float]   # per column
+    gap_count:         int                # number of candle gaps
+    outlier_count:     int
+    ohlc_logic_errors: int                # High < Low, etc.
+    passed:            bool               # True if all thresholds are met
+    warnings:          list[str]
+```
 
-**Threshold yang Harus Dipenuhi (passed=True)**
+**Thresholds Required for passed=True**
 
-  -----------------------------------------------------------------------------------------------------------
-  **Check**          **Threshold**               **Aksi jika gagal**
-  ------------------ --------------------------- ------------------------------------------------------------
-  Missing candle     \< 1% dari total candle     Log warning, lanjutkan. Jika \> 5%, raise DataQualityError
+| Check | Threshold | Action if Failed |
+|---|---|---|
+| Missing candle | < 1% of total candles | Log warning, continue. If > 5%, raise DataQualityError |
+| OHLC logic error | = 0 | Raise DataQualityError — data is corrupt |
+| Gap > MAX_FFILL | < 10 gaps per 1000 candles | Log warning |
+| Volume = 0 | < 0.5% of candles | Log warning — may be an illiquid pair |
 
-  OHLC logic error   = 0                         Raise DataQualityError --- data corrupt
+---
 
-  Gap \> MAX_FFILL   \< 10 gap per 1000 candle   Log warning
+### 3.2 leakage_check.py
 
-  Volume = 0         \< 0.5% dari candle         Log warning --- bisa pair illiquid
-  -----------------------------------------------------------------------------------------------------------
+A critical validation to ensure no future information leaks into the features. Data leakage is the primary cause of overly optimistic backtests.
 
-**3.2 leakage_check.py**
+**Public Interface**
 
-Validasi kritis untuk memastikan tidak ada informasi masa depan yang bocor ke fitur. Data leakage adalah penyebab utama backtest terlalu optimis.
+| Function | Parameters | Return |
+|---|---|---|
+| `check_temporal_leakage()` | df: pd.DataFrame, feature_cols: list, target_col: str | bool — True = safe (no leakage) |
+| `check_lookahead_bias()` | df, window: int | dict[col, correlation_with_future] |
+| `check_index_alignment()` | features: pd.DataFrame, target: pd.Series | bool |
 
-**Interface Publik**
+**How Temporal Leakage Check Works**
 
-  -----------------------------------------------------------------------------------------------------------------------------
-  **Fungsi**                 **Parameter**                                           **Return**
-  -------------------------- ------------------------------------------------------- ------------------------------------------
-  check_temporal_leakage()   df: pd.DataFrame, feature_cols: list, target_col: str   bool --- True = aman (tidak ada leakage)
+1. Compute the correlation of every feature column with the future target (shift -1, -2, -5).
+2. Correlation > 0.8 with the future → strong indication of leakage.
+3. Rolling window forward correlation: correlation of feature[t] with close[t+N] must not be consistently high.
+4. For features that use `.shift()`: ensure the shift is positive (not negative) for historical data.
 
-  check_lookahead_bias()     df, window: int                                         dict\[col, correlation_with_future\]
+> **RULE:** `leakage_check.py` MUST be run after `feature_engineering.py` and BEFORE `train.py`. The pipeline must not continue if `check_temporal_leakage()` returns False.
 
-  check_index_alignment()    features: pd.DataFrame, target: pd.Series               bool
-  -----------------------------------------------------------------------------------------------------------------------------
+---
 
-**Cara Kerja Temporal Leakage Check**
+### 3.3 consistency_check.py
 
-> **1.** Hitung korelasi setiap kolom fitur dengan target masa depan (shift -1, -2, -5).
->
-> **2.** Korelasi \> 0.8 dengan masa depan → indikasi kuat leakage.
->
-> **3.** Rolling window forward correlation: korelasi fitur\[t\] dengan close\[t+N\] tidak boleh konsisten tinggi.
->
-> **4.** Khusus fitur yang menggunakan .shift(): pastikan shift positif (bukan negatif) untuk data historis.
+Validates data consistency across timeframes and across symbols. Ensures 1H data can be derived from 15m data, and that BTCUSDT spot is consistent with BTCUSDT futures.
 
-  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **ATURAN:** leakage_check.py WAJIB dijalankan setelah feature_engineering.py dan SEBELUM train.py. Pipeline tidak boleh dilanjutkan jika check_temporal_leakage() mengembalikan False.
+**Public Interface**
 
-  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Function | Parameters | Return |
+|---|---|---|
+| `check_tf_consistency()` | df_low: pd.DataFrame, df_high: pd.DataFrame, src_tf: str, tgt_tf: str | bool, list[str] discrepancies |
+| `check_spot_futures()` | df_spot: pd.DataFrame, df_futures: pd.DataFrame | bool, max_basis_pct: float |
+| `check_feature_drift()` | df_old: pd.DataFrame, df_new: pd.DataFrame | dict[col, psi_score] — Population Stability Index |
 
-**3.3 consistency_check.py**
+**PSI Thresholds for Feature Drift**
 
-Memvalidasi konsistensi data lintas timeframe dan lintas simbol. Memastikan data 1H bisa di-derive dari data 15m, dan BTCUSDT spot konsisten dengan BTCUSDT futures.
+| PSI Score | Interpretation | Action |
+|---|---|---|
+| < 0.1 | No drift | Safe, continue training |
+| 0.1–0.2 | Minor drift | Log warning, monitor |
+| > 0.2 | Significant drift | Stop training, investigate data source |
 
-**Interface Publik**
+---
 
-  --------------------------------------------------------------------------------------------------------------------------------------------------------
-  **Fungsi**               **Parameter**                                                           **Return**
-  ------------------------ ----------------------------------------------------------------------- -------------------------------------------------------
-  check_tf_consistency()   df_low: pd.DataFrame, df_high: pd.DataFrame, src_tf: str, tgt_tf: str   bool, list\[str\] discrepancies
+## 4. Modeling — Training & Evaluation
 
-  check_spot_futures()     df_spot: pd.DataFrame, df_futures: pd.DataFrame                         bool, max_basis_pct: float
+### 4.1 train.py
 
-  check_feature_drift()    df_old: pd.DataFrame, df_new: pd.DataFrame                              dict\[col, psi_score\] --- Population Stability Index
-  --------------------------------------------------------------------------------------------------------------------------------------------------------
+Trains the ML model from validated features. Supports LightGBM (default), XGBoost, and other sklearn estimators through a uniform interface.
 
-**PSI Threshold untuk Feature Drift**
+**Public Interface**
 
-  ---------------------------------------------------------------------------
-  **PSI Score**   **Interpretasi**   **Aksi**
-  --------------- ------------------ ----------------------------------------
-  \< 0.1          Tidak ada drift    Aman, lanjutkan training
+| Function | Parameters | Return | Side Effect |
+|---|---|---|---|
+| `train_model()` | df: pd.DataFrame, config: TrainConfig | TrainedModel dataclass | Saves .pkl to models/ |
+| `load_model()` | path: str \| Path | TrainedModel | — |
+| `predict()` | model: TrainedModel, X: pd.DataFrame | np.ndarray — probabilities / return | — |
+| `get_feature_list()` | model: TrainedModel | list[str] | — |
 
-  0.1 -- 0.2      Drift minor        Log warning, monitor
+**TrainConfig — Dataclass**
 
-  \> 0.2          Drift signifikan   Stop training, investigasi sumber data
-  ---------------------------------------------------------------------------
+```python
+@dataclass
+class TrainConfig:
+    model_type:     str   = 'lightgbm'    # lightgbm | xgboost | random_forest
+    target_col:     str   = 'target_return_4h'
+    task:           str   = 'regression'  # regression | classification
+    test_size:      float = 0.2
+    n_splits:       int   = 5             # for walk_forward
+    early_stopping: int   = 50
+    verbose:        int   = 100
 
-**4. Modeling --- Training & Evaluasi**
+    # LightGBM params (override if needed)
+    lgbm_params: dict = field(default_factory=lambda: {
+        'n_estimators':    1000,
+        'learning_rate':   0.05,
+        'num_leaves':      31,
+        'subsample':       0.8,
+        'colsample_bytree':0.8,
+        'reg_alpha':       0.1,
+        'reg_lambda':      0.1,
+    })
+```
 
-**4.1 train.py**
+**TrainedModel — Dataclass (output artifact)**
 
-Melatih model ML dari fitur yang sudah divalidasi. Mendukung LightGBM (default), XGBoost, dan sklearn estimator lainnya melalui interface yang seragam.
+```python
+@dataclass
+class TrainedModel:
+    model:             Any           # estimator object
+    feature_names:     list[str]     # REQUIRED — runtime needs this
+    target_col:        str
+    model_type:        str
+    train_date_range:  tuple[str, str]
+    metrics:           dict          # val_score, ic, etc.
+    config:            TrainConfig
+    version:           str           # semver: '1.0.0'
+```
 
-**Interface Publik**
+> **CRITICAL:** `feature_names` inside `TrainedModel` is the contract between Research and Runtime. Runtime MUST prepare features with exactly the same order and names. If they differ, the model will produce garbage predictions without any explicit error.
 
-  ----------------------------------------------------------------------------------------------------------------------------
-  **Fungsi**           **Parameter**                           **Return**                             **Side Effect**
-  -------------------- --------------------------------------- -------------------------------------- ------------------------
-  train_model()        df: pd.DataFrame, config: TrainConfig   TrainedModel dataclass                 Simpan .pkl ke models/
+---
 
-  load_model()         path: str \| Path                       TrainedModel                           ---
+### 4.2 walk_forward.py
 
-  predict()            model: TrainedModel, X: pd.DataFrame    np.ndarray --- probabilitas / return   ---
+Validates the model using walk-forward (expanding window or rolling window). This is the most realistic validation method for time series data because it never uses future data for training.
 
-  get_feature_list()   model: TrainedModel                     list\[str\]                            ---
-  ----------------------------------------------------------------------------------------------------------------------------
+**Walk-Forward Scheme**
 
-**TrainConfig --- Dataclass**
+```
+Expanding Window (default):
+  Fold 1: Train [Jan–Jun]  →  Val [Jul]
+  Fold 2: Train [Jan–Jul]  →  Val [Aug]
+  Fold 3: Train [Jan–Aug]  →  Val [Sep]
+  ...
 
-+------------------------------------------------------------------------+
-| \@dataclass                                                            |
-|                                                                        |
-| class TrainConfig:                                                     |
-|                                                                        |
-| model_type: str = \'lightgbm\' \# lightgbm \| xgboost \| random_forest |
-|                                                                        |
-| target_col: str = \'target_return_4h\'                                 |
-|                                                                        |
-| task: str = \'regression\' \# regression \| classification             |
-|                                                                        |
-| test_size: float = 0.2                                                 |
-|                                                                        |
-| n_splits: int = 5 \# untuk walk_forward                                |
-|                                                                        |
-| early_stopping: int = 50                                               |
-|                                                                        |
-| verbose: int = 100                                                     |
-|                                                                        |
-| \# LightGBM params (override jika perlu)                               |
-|                                                                        |
-| lgbm_params: dict = field(default_factory=lambda: {                    |
-|                                                                        |
-| \'n_estimators\': 1000,                                                |
-|                                                                        |
-| \'learning_rate\': 0.05,                                               |
-|                                                                        |
-| \'num_leaves\': 31,                                                    |
-|                                                                        |
-| \'subsample\': 0.8,                                                    |
-|                                                                        |
-| \'colsample_bytree\': 0.8,                                             |
-|                                                                        |
-| \'reg_alpha\': 0.1,                                                    |
-|                                                                        |
-| \'reg_lambda\': 0.1,                                                   |
-|                                                                        |
-| })                                                                     |
-+------------------------------------------------------------------------+
+Rolling Window (set rolling=True):
+  Fold 1: Train [Jan–Jun]  →  Val [Jul]
+  Fold 2: Train [Feb–Jul]  →  Val [Aug]  (Jan is dropped)
+  ...
 
-**TrainedModel --- Dataclass (artefak output)**
+Required gap between train end and val start:
+  → At least equal to the target horizon
+  → If target = 4H, gap = 4 candles = 16 hours
+```
 
-+-----------------------------------------------------------+
-| \@dataclass                                               |
-|                                                           |
-| class TrainedModel:                                       |
-|                                                           |
-| model: Any \# estimator object                            |
-|                                                           |
-| feature_names: list\[str\] \# WAJIB --- runtime butuh ini |
-|                                                           |
-| target_col: str                                           |
-|                                                           |
-| model_type: str                                           |
-|                                                           |
-| train_date_range: tuple\[str, str\]                       |
-|                                                           |
-| metrics: dict \# val_score, ic, dll                       |
-|                                                           |
-| config: TrainConfig                                       |
-|                                                           |
-| version: str \# semver: \'1.0.0\'                         |
-+-----------------------------------------------------------+
+**Public Interface**
 
-  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **KRITIS:** feature_names di dalam TrainedModel adalah kontrak antara Research dan Runtime. Runtime WAJIB menyiapkan fitur dengan urutan dan nama yang persis sama. Jika berbeda, model akan menghasilkan prediksi sampah tanpa error.
-
-  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-**4.2 walk_forward.py**
-
-Validasi model menggunakan walk-forward (expanding window atau rolling window). Ini adalah metode validasi paling realistis untuk data time series karena tidak menggunakan data masa depan untuk training.
-
-**Skema Walk-Forward**
-
-+--------------------------------------------------------+
-| Expanding Window (default):                            |
-|                                                        |
-| Fold 1: Train \[Jan--Jun\] → Val \[Jul\]               |
-|                                                        |
-| Fold 2: Train \[Jan--Jul\] → Val \[Aug\]               |
-|                                                        |
-| Fold 3: Train \[Jan--Aug\] → Val \[Sep\]               |
-|                                                        |
-| \...                                                   |
-|                                                        |
-| Rolling Window (set rolling=True):                     |
-|                                                        |
-| Fold 1: Train \[Jan--Jun\] → Val \[Jul\]               |
-|                                                        |
-| Fold 2: Train \[Feb--Jul\] → Val \[Aug\] (Jan dibuang) |
-|                                                        |
-| \...                                                   |
-|                                                        |
-| Gap wajib antara train end dan val start:              |
-|                                                        |
-| → Minimal sama dengan target horizon                   |
-|                                                        |
-| → Jika target = 4H, gap = 4 candle = 16 jam            |
-+--------------------------------------------------------+
-
-**Interface Publik**
-
-  -----------------------------------------------------------------------------------------------------------------
-  **Fungsi**            **Parameter**                                 **Return**
-  --------------------- --------------------------------------------- ---------------------------------------------
-  walk_forward_cv()     df, config: WalkForwardConfig                 list\[FoldResult\] --- metrics per fold
-
-  aggregate_results()   results: list\[FoldResult\]                   WalkForwardSummary --- mean, std, stability
-
-  plot_equity_curve()   results: list\[FoldResult\], save_path: str   None --- simpan gambar
-  -----------------------------------------------------------------------------------------------------------------
+| Function | Parameters | Return |
+|---|---|---|
+| `walk_forward_cv()` | df, config: WalkForwardConfig | list[FoldResult] — metrics per fold |
+| `aggregate_results()` | results: list[FoldResult] | WalkForwardSummary — mean, std, stability |
+| `plot_equity_curve()` | results: list[FoldResult], save_path: str | None — saves image |
 
 **WalkForwardConfig**
 
-+-------------------------------------------------------------+
-| \@dataclass                                                 |
-|                                                             |
-| class WalkForwardConfig:                                    |
-|                                                             |
-| n_splits: int = 5                                           |
-|                                                             |
-| gap_periods: int = 4 \# candle gap antara train & val       |
-|                                                             |
-| rolling: bool = False \# False = expanding window           |
-|                                                             |
-| min_train_size: int = 1000 \# minimum candle untuk training |
-+-------------------------------------------------------------+
+```python
+@dataclass
+class WalkForwardConfig:
+    n_splits:       int  = 5
+    gap_periods:    int  = 4       # candle gap between train & val
+    rolling:        bool = False   # False = expanding window
+    min_train_size: int  = 1000    # minimum candles for training
+```
 
-**4.3 evaluate.py**
+---
 
-Menghitung semua metrik evaluasi model. Memiliki threshold minimum yang harus dipenuhi sebelum model diizinkan lanjut ke backtest.
+### 4.3 evaluate.py
 
-**Metrik yang Dihitung**
+Computes all model evaluation metrics. Has minimum thresholds that must be met before the model is allowed to proceed to backtest.
 
-  --------------------------------------------------------------------------------------------------------------------------
-  **Metrik**               **Formula**                          **Threshold Minimum**   **Catatan**
-  ------------------------ ------------------------------------ ----------------------- ------------------------------------
-  IC (Information Coef.)   spearman(pred, actual_return)        \> 0.05                 IC \< 0.03 = model tidak prediktif
+**Metrics Computed**
 
-  ICIR                     IC.mean() / IC.std()                 \> 0.5                  Stabilitas IC antar periode
+| Metric | Formula | Minimum Threshold | Notes |
+|---|---|---|---|
+| IC (Information Coef.) | spearman(pred, actual_return) | > 0.05 | IC < 0.03 = model is not predictive |
+| ICIR | IC.mean() / IC.std() | > 0.5 | IC stability across periods |
+| Directional Accuracy | sign(pred) == sign(actual) | > 52% | Above 50% means there is an edge |
+| Sharpe (signal) | mean(ret*signal)/std(ret*signal) | ≥ 0.8 | Before transaction costs |
+| Max DD (signal) | max drawdown of equity curve | < 30% | Signal drawdown, not trade drawdown |
 
-  Directional Accuracy     sign(pred) == sign(actual)           \> 52%                  Di atas 50% berarti ada edge
+> **PIPELINE RULE:** If any threshold is not met, `evaluate.py` MUST raise `ModelNotReadyError` and the pipeline stops. The model must not be deployed to backtest, let alone to runtime.
 
-  Sharpe (signal)          mean(ret\*signal)/std(ret\*signal)   ≥ 0.8                   Sebelum biaya transaksi
+---
 
-  Max DD (signal)          max drawdown equity curve            \< 30%                  Drawdown sinyal, bukan trade
-  --------------------------------------------------------------------------------------------------------------------------
+### 4.4 model_registry.py
 
-  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **ATURAN PIPELINE:** Jika salah satu threshold tidak terpenuhi, evaluate.py WAJIB raise ModelNotReadyError dan pipeline dihentikan. Model tidak boleh di-deploy ke backtest apalagi runtime.
+Versioning and tracking of all models ever trained. Every model has complete metadata so it can be rolled back at any time.
 
-  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+**metadata.json — Format**
 
-**4.4 model_registry.py**
+```json
+{
+  "model_id":       "spot_lgbm_v2_3_0",
+  "version":        "2.3.0",
+  "created_at":     "2024-11-15T08:30:00Z",
+  "model_type":     "lightgbm",
+  "target_col":     "target_return_4h",
+  "symbol":         "BTCUSDT",
+  "timeframe":      "1h",
+  "train_period":   ["2020-01-01", "2024-10-31"],
+  "feature_names":  ["rsi_14", "ema_ratio_9_21", "atr_14", ...],
+  "feature_count":  47,
+  "metrics": {
+    "ic_mean": 0.078, "ic_std": 0.031, "icir": 1.85,
+    "dir_accuracy": 0.543, "sharpe_signal": 1.12
+  },
+  "status":         "production",
+  "replaces":       "spot_lgbm_v2_2_1"
+}
+```
 
-Versioning dan tracking semua model yang pernah ditraining. Setiap model punya metadata lengkap sehingga bisa di-rollback kapan saja.
+**Model Status Lifecycle**
 
-**metadata.json --- Format**
+| Status | Meaning | Transitions To |
+|---|---|---|
+| **candidate** | Just finished training, not yet validated | validated (after evaluate.py passes) |
+| **validated** | Passed all evaluate.py thresholds | production (after backtest passes) |
+| **production** | Actively used in runtime | deprecated (when replaced by a new version) |
+| **deprecated** | Replaced by a new version, kept for rollback | archived (after 90 days) |
+| **failed** | Did not pass thresholds, must not be deployed | — (reference only) |
 
-+--------------------------------------------------------------------------+
-| {                                                                        |
-|                                                                          |
-| \"model_id\": \"spot_lgbm_v2_3_0\",                                      |
-|                                                                          |
-| \"version\": \"2.3.0\",                                                  |
-|                                                                          |
-| \"created_at\": \"2024-11-15T08:30:00Z\",                                |
-|                                                                          |
-| \"model_type\": \"lightgbm\",                                            |
-|                                                                          |
-| \"target_col\": \"target_return_4h\",                                    |
-|                                                                          |
-| \"symbol\": \"BTCUSDT\",                                                 |
-|                                                                          |
-| \"timeframe\": \"1h\",                                                   |
-|                                                                          |
-| \"train_period\": \[\"2020-01-01\", \"2024-10-31\"\],                    |
-|                                                                          |
-| \"feature_names\": \[\"rsi_14\", \"ema_ratio_9_21\", \"atr_14\", \...\], |
-|                                                                          |
-| \"feature_count\": 47,                                                   |
-|                                                                          |
-| \"metrics\": {                                                           |
-|                                                                          |
-| \"ic_mean\": 0.078, \"ic_std\": 0.031, \"icir\": 1.85,                   |
-|                                                                          |
-| \"dir_accuracy\": 0.543, \"sharpe_signal\": 1.12                         |
-|                                                                          |
-| },                                                                       |
-|                                                                          |
-| \"status\": \"production\",                                              |
-|                                                                          |
-| \"replaces\": \"spot_lgbm_v2_2_1\"                                       |
-|                                                                          |
-| }                                                                        |
-+--------------------------------------------------------------------------+
+---
 
-**Status Lifecycle Model**
+## 5. Backtest — Trading Simulation
 
-  ------------------------------------------------------------------------------------------------------------
-  **Status**       **Artinya**                                         **Transisi ke**
-  ---------------- --------------------------------------------------- ---------------------------------------
-  **candidate**    Baru selesai training, belum divalidasi             validated (setelah evaluate.py lulus)
+The backtest layer is the most critical step for assessing whether the model and strategy are ready to deploy. The accuracy of the simulation determines whether live performance will be consistent with backtested results.
 
-  **validated**    Lulus semua threshold evaluate.py                   production (setelah backtest lulus)
+> **PRINCIPLE:** A good backtest is better off showing conservative rather than optimistic results. Every assumption that makes results look better should be questioned.
 
-  **production**   Aktif digunakan di runtime                          deprecated (saat diganti versi baru)
+### 5.1 engine.py — Backtest Engine
 
-  **deprecated**   Diganti versi baru, masih disimpan untuk rollback   archived (setelah 90 hari)
+An event-driven backtest engine. Processes candles one by one in chronological order to avoid lookahead bias.
 
-  **failed**       Tidak lulus threshold, tidak boleh deploy           --- (hanya untuk referensi)
-  ------------------------------------------------------------------------------------------------------------
+**Public Interface**
 
-**5. Backtest --- Simulasi Trading**
-
-Backtest layer adalah yang paling kritikal untuk menilai apakah model dan strategi layak di-deploy. Keakuratan simulasi sangat menentukan apakah live performance akan konsisten dengan backtest.
-
-  ------------------------------------------------------------------------------------------------------------------------------------------------------
-  **PRINSIP:** Backtest yang baik lebih baik menunjukkan hasil konservatif daripada optimis. Setiap asumsi yang memperbagus hasil harus dipertanyakan.
-
-  ------------------------------------------------------------------------------------------------------------------------------------------------------
-
-**5.1 engine.py --- Backtest Engine**
-
-Event-driven backtest engine. Memproses candle satu per satu secara kronologis untuk menghindari lookahead bias.
-
-**Interface Publik**
-
-  ----------------------------------------------------------------------------------------
-  **Fungsi / Class**   **Parameter**                                    **Return**
-  -------------------- ------------------------------------------------ ------------------
-  **BacktestEngine**   config: BacktestConfig                           ---
-
-  .run()               df: pd.DataFrame, strategy: BaseStrategy         BacktestResult
-
-  .run_portfolio()     dfs: dict\[str, pd.DataFrame\], strategy: \...   PortfolioResult
-  ----------------------------------------------------------------------------------------
+| Function / Class | Parameters | Return |
+|---|---|---|
+| **BacktestEngine** | config: BacktestConfig | — |
+| `.run()` | df: pd.DataFrame, strategy: BaseStrategy | BacktestResult |
+| `.run_portfolio()` | dfs: dict[str, pd.DataFrame], strategy: ... | PortfolioResult |
 
 **BacktestConfig**
 
-+-------------------------------------------------------------------------+
-| \@dataclass                                                             |
-|                                                                         |
-| class BacktestConfig:                                                   |
-|                                                                         |
-| initial_capital: float = 10_000.0 \# USDT                               |
-|                                                                         |
-| commission_pct: float = 0.001 \# 0.1% taker fee Binance                 |
-|                                                                         |
-| slippage_model: str = \'liquidity\' \# fixed \| percentage \| liquidity |
-|                                                                         |
-| slippage_pct: float = 0.0005 \# 0.05% jika model=\'percentage\'         |
-|                                                                         |
-| use_orderbook: bool = True \# pakai orderbook_simulator                 |
-|                                                                         |
-| execution_delay: int = 1 \# candle delay sebelum fill                   |
-|                                                                         |
-| max_position_pct: float = 0.1 \# max 10% per posisi                     |
-|                                                                         |
-| allow_short: bool = False \# spot: False, futures: True                 |
-|                                                                         |
-| funding_rate: bool = False \# True untuk futures                        |
-+-------------------------------------------------------------------------+
+```python
+@dataclass
+class BacktestConfig:
+    initial_capital:  float = 10_000.0    # USDT
+    commission_pct:   float = 0.001       # 0.1% taker fee Binance
+    slippage_model:   str   = 'liquidity' # fixed | percentage | liquidity
+    slippage_pct:     float = 0.0005      # 0.05% if model='percentage'
+    use_orderbook:    bool  = True        # use orderbook_simulator
+    execution_delay:  int   = 1           # candle delay before fill
+    max_position_pct: float = 0.1         # max 10% per position
+    allow_short:      bool  = False       # spot: False, futures: True
+    funding_rate:     bool  = False       # True for futures
+```
 
-**Urutan Eksekusi Per Candle (WAJIB DIIKUTI)**
+**Candle Execution Sequence (MUST BE FOLLOWED)**
 
-> **1.** Terima candle baru (OHLCV).
->
-> **2.** Update posisi yang ada: cek SL, TP, trailing stop menggunakan high/low candle.
->
-> **3.** Panggil strategi: strategy.on_candle(candle, portfolio_state) → Signal.
->
-> **4.** Proses signal melalui risk check (position sizing, exposure).
->
-> **5.** Simulasi eksekusi order pada candle BERIKUTNYA (execution_delay=1).
->
-> **6.** Catat trade & update equity.
+1. Receive new candle (OHLCV).
+2. Update existing positions: check SL, TP, trailing stop using candle high/low.
+3. Call strategy: `strategy.on_candle(candle, portfolio_state)` → Signal.
+4. Process signal through risk check (position sizing, exposure).
+5. Simulate order execution on the **NEXT** candle (`execution_delay=1`).
+6. Record trade & update equity.
 
-  -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **LOOKAHEAD PROTECTION:** Signal pada candle T tidak boleh di-fill pada harga candle T. Minimal fill pada open candle T+1. Ini meniru kondisi live trading yang sesungguhnya.
+> **LOOKAHEAD PROTECTION:** A signal on candle T must not be filled at candle T's price. The minimum is to fill at the open of candle T+1. This mimics real live trading conditions.
 
-  -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---
 
-**5.2 orderbook_simulator.py & liquidity_model.py**
+### 5.2 orderbook_simulator.py & liquidity_model.py
 
-Dua komponen ini bekerja bersama untuk mensimulasikan fill order secara realistis berdasarkan depth orderbook yang diambil dari fetch_orderbook_snap().
+These two components work together to simulate order fills realistically, based on orderbook depth data obtained from `fetch_orderbook_snap()`.
 
-**Interface --- orderbook_simulator.py**
+**Interface — orderbook_simulator.py**
 
-  -----------------------------------------------------------------------------------------------------------------------
-  **Fungsi**                 **Parameter**                                 **Return**
-  -------------------------- --------------------------------------------- ----------------------------------------------
-  simulate_fill()            order: Order, orderbook: Orderbook            FillResult (avg_price, filled_qty, slippage)
-
-  load_orderbook()           symbol: str, timestamp: datetime              Orderbook --- snapshot terdekat dari data
-
-  estimate_market_impact()   qty: float, orderbook: Orderbook, side: str   float --- estimasi impact dalam persen
-  -----------------------------------------------------------------------------------------------------------------------
+| Function | Parameters | Return |
+|---|---|---|
+| `simulate_fill()` | order: Order, orderbook: Orderbook | FillResult (avg_price, filled_qty, slippage) |
+| `load_orderbook()` | symbol: str, timestamp: datetime | Orderbook — nearest snapshot from data |
+| `estimate_market_impact()` | qty: float, orderbook: Orderbook, side: str | float — estimated impact in percent |
 
 **FillResult Dataclass**
 
-+------------------------------------------------------------+
-| \@dataclass                                                |
-|                                                            |
-| class FillResult:                                          |
-|                                                            |
-| avg_price: float \# harga rata-rata fill                   |
-|                                                            |
-| filled_qty: float \# qty yang berhasil di-fill             |
-|                                                            |
-| slippage_pct: float \# (avg_price - mid_price) / mid_price |
-|                                                            |
-| market_impact:float \# estimasi impact ke harga            |
-|                                                            |
-| partial: bool \# True jika tidak fully filled              |
-|                                                            |
-| unfilled_qty: float \# qty yang tidak ter-fill             |
-+------------------------------------------------------------+
+```python
+@dataclass
+class FillResult:
+    avg_price:     float    # average fill price
+    filled_qty:    float    # quantity successfully filled
+    slippage_pct:  float    # (avg_price - mid_price) / mid_price
+    market_impact: float    # estimated price impact
+    partial:       bool     # True if not fully filled
+    unfilled_qty:  float    # quantity not filled
+```
 
-**Model Slippage --- liquidity_model.py**
+**Slippage Models — liquidity_model.py**
 
-  -----------------------------------------------------------------------------------------------------
-  **Model**    **Formula**                                             **Kapan Digunakan**
-  ------------ ------------------------------------------------------- --------------------------------
-  fixed        slippage = slippage_pct × price                         Testing cepat, tidak realistis
+| Model | Formula | When to Use |
+|---|---|---|
+| `fixed` | slippage = slippage_pct × price | Quick testing, not realistic |
+| `percentage` | slippage = order_value / ADV × impact_factor | When no orderbook data is available |
+| `liquidity` | Walk through orderbook bids/asks until qty is met | Default — most realistic |
 
-  percentage   slippage = order_value / ADV × impact_factor            Jika tidak ada orderbook data
+---
 
-  liquidity    Walk through orderbook bids/asks sampai qty terpenuhi   Default --- paling realistis
-  -----------------------------------------------------------------------------------------------------
+### 5.3 execution_emulator.py
 
-**5.3 execution_emulator.py**
+Emulates execution uncertainty: network delays, partial fills, order rejections, and retry logic.
 
-Mengemulasi ketidakpastian eksekusi: delay jaringan, partial fill, order rejection, dan retry logic.
+**Emulated Scenarios**
 
-**Skenario yang Diemulasi**
+| Scenario | Default Probability | Impact | Config Key |
+|---|---|---|---|
+| Execution delay 1 candle | 100% | Fill at open of next candle | `execution_delay` |
+| Partial fill | 5% | Only 70–99% of qty is filled | `partial_fill_prob` |
+| Order rejection | 0.5% | Order not entered, requires retry | `rejection_prob` |
+| Price gap / slippage | 100% | Price differs from expected | `slippage_model` |
+| High volatility spread | ATR-based | Spread widens when ATR is high | `vol_spread_multiplier` |
 
-  ------------------------------------------------------------------------------------------------------------------
-  **Skenario**               **Probabilitas Default**   **Dampak**                           **Config Key**
-  -------------------------- -------------------------- ------------------------------------ -----------------------
-  Execution delay 1 candle   100%                       Fill pada open candle berikutnya     execution_delay
+---
 
-  Partial fill               5%                         Hanya 70--99% qty yang ter-fill      partial_fill_prob
+### 5.4 metrics.py
 
-  Order rejection            0.5%                       Order tidak masuk, perlu retry       rejection_prob
+Computes all performance metrics from backtest results. All metrics must be computed consistently using a single source of truth.
 
-  Price gap / slippage       100%                       Harga berbeda dari expected          slippage_model
+**All Metrics Computed**
 
-  High volatility spread     ATR-based                  Spread lebih lebar saat ATR tinggi   vol_spread_multiplier
-  ------------------------------------------------------------------------------------------------------------------
+| Metric | Formula | Minimum Threshold for Deploy |
+|---|---|---|
+| Total ROI | ((final_equity - initial) / initial) × 100 | Positive after costs |
+| CAGR | (final/initial)^(365/days) - 1 | > 20% per year |
+| Max Drawdown | max(peak - trough) / peak | < 20% |
+| Sharpe Ratio | annualized(mean_return) / annualized(std_return) | ≥ 1.0 |
+| Sortino Ratio | annualized(mean_return) / annualized(downside_std) | ≥ 1.5 |
+| Calmar Ratio | CAGR / max_drawdown | ≥ 1.0 |
+| Win Rate | winning_trades / total_trades | > 45% |
+| Profit Factor | gross_profit / gross_loss | > 1.3 |
+| Avg R:R | avg_win / avg_loss | > 1.2 |
+| Total Trades | count | > 30 (statistically valid) |
 
-**5.4 metrics.py**
+> **IMPORTANT:** Sharpe Ratio must be computed using daily returns (not trade returns) and compared against a risk-free rate of 0 (since we hold USDT, not bonds).
 
-Menghitung seluruh metrik performa dari hasil backtest. Semua metrik harus dihitung secara konsisten menggunakan satu sumber kebenaran.
+---
 
-**Semua Metrik yang Dihitung**
+## 6. Optimization — Parameter Tuning
 
-  ---------------------------------------------------------------------------------------------------
-  **Metrik**      **Formula**                                          **Threshold Minimum Deploy**
-  --------------- ---------------------------------------------------- ------------------------------
-  Total ROI       ((final_equity - initial) / initial) × 100           Positif setelah biaya
+The optimization layer searches for the best parameter combination for a strategy. Out-of-sample validation is mandatory to avoid overfitting.
 
-  CAGR            (final/initial)\^(365/days) - 1                      \> 20% per tahun
+> **HARD WARNING:** Never optimize on the entire dataset and then test on the same data. Always set aside the out-of-sample period BEFORE optimization begins. This period must not be viewed until the final evaluation.
 
-  Max Drawdown    max(peak - trough) / peak                            \< 20%
+### 6.1 Correct Optimization Protocol
 
-  Sharpe Ratio    annualized(mean_return) / annualized(std_return)     ≥ 1.0
+```
+Split data BEFORE optimization:
+  Total data:      Jan 2020 – Dec 2024  (5 years)
+  In-sample:       Jan 2020 – Dec 2023  (4 years) ← used for optimization
+  Out-of-sample:   Jan 2024 – Dec 2024  (1 year)  ← MUST NOT BE VIEWED
 
-  Sortino Ratio   annualized(mean_return) / annualized(downside_std)   ≥ 1.5
+Workflow:
+  1. Optimize parameters using in-sample walk-forward
+  2. Select best_params based on in-sample Sharpe
+  3. Run backtest ONCE on out-of-sample
+  4. Compare IS vs OOS — degradation > 40% = overfitting
+  5. If passes, proceed to deploy. If not, return to step 1
+```
 
-  Calmar Ratio    CAGR / max_drawdown                                  ≥ 1.0
+---
 
-  Win Rate        winning_trades / total_trades                        \> 45%
+### 6.2 tuner.py — Runner
 
-  Profit Factor   gross_profit / gross_loss                            \> 1.3
+**Public Interface**
 
-  Avg R:R         avg_win / avg_loss                                   \> 1.2
+| Function | Parameters | Return |
+|---|---|---|
+| `run_optimization()` | param_space: dict, config: OptConfig, method: str | OptResult — best_params, all_trials |
+| `load_best_params()` | symbol: str, strategy: str | dict — best params from file |
+| `save_best_params()` | params: dict, symbol: str, strategy: str | Path |
 
-  Total Trades    count                                                \> 30 (statistik valid)
-  ---------------------------------------------------------------------------------------------------
+---
 
-  ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **PENTING:** Sharpe Ratio harus dihitung menggunakan daily return (bukan trade return) dan dibandingkan dengan risk-free rate 0 (karena kita memegang USDT, bukan obligasi).
+### 6.3 bayesian_opt.py vs grid_search.py
 
-  ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-**6. Optimization --- Tuning Parameter**
-
-Optimization layer mencari kombinasi parameter terbaik untuk strategi. Wajib menggunakan out-of-sample validation untuk menghindari overfitting.
-
-  --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **PERINGATAN KERAS:** Jangan pernah optimize pada seluruh dataset lalu test pada data yang sama. Selalu sisihkan out-of-sample period SEBELUM optimasi dimulai. Periode ini tidak boleh dilihat sampai final evaluation.
-
-  --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-**6.1 Protokol Optimasi yang Benar**
-
-+---------------------------------------------------------------------+
-| Split data SEBELUM optimasi:                                        |
-|                                                                     |
-| Total data: Jan 2020 -- Des 2024 (5 tahun)                          |
-|                                                                     |
-| In-sample: Jan 2020 -- Des 2023 (4 tahun) ← untuk optimize          |
-|                                                                     |
-| Out-of-sample: Jan 2024 -- Des 2024 (1 tahun) ← TIDAK BOLEH DILIHAT |
-|                                                                     |
-| Alur:                                                               |
-|                                                                     |
-| 1\. Optimize parameter menggunakan in-sample walk-forward           |
-|                                                                     |
-| 2\. Pilih best_params berdasarkan Sharpe in-sample                  |
-|                                                                     |
-| 3\. Jalankan backtest SEKALI di out-of-sample                       |
-|                                                                     |
-| 4\. Bandingkan IS vs OOS --- degradasi \> 40% = overfitting         |
-|                                                                     |
-| 5\. Jika lulus, lanjut ke deploy. Jika tidak, kembali ke step 1     |
-+---------------------------------------------------------------------+
-
-**6.2 tuner.py --- Runner**
-
-**Interface Publik**
-
-  ----------------------------------------------------------------------------------------------------------------
-  **Fungsi**           **Parameter**                                       **Return**
-  -------------------- --------------------------------------------------- ---------------------------------------
-  run_optimization()   param_space: dict, config: OptConfig, method: str   OptResult --- best_params, all_trials
-
-  load_best_params()   symbol: str, strategy: str                          dict --- best params dari file
-
-  save_best_params()   params: dict, symbol: str, strategy: str            Path
-  ----------------------------------------------------------------------------------------------------------------
-
-**6.3 bayesian_opt.py vs grid_search.py**
-
-  ----------------------------------------------------------------------------------------------------------------------
-  **Metode**         **Kapan Digunakan**                     **Kelebihan**                    **Kekurangan**
-  ------------------ --------------------------------------- -------------------------------- --------------------------
-  **grid_search**    Parameter sedikit (\< 3), range kecil   Exhaustive, mudah debug          Exponential complexity
-
-  **bayesian_opt**   Parameter banyak (\> 3), range besar    Efisien, lebih cepat konvergen   Perlu lebih banyak setup
-  ----------------------------------------------------------------------------------------------------------------------
+| Method | When to Use | Advantage | Disadvantage |
+|---|---|---|---|
+| **grid_search** | Few parameters (< 3), small range | Exhaustive, easy to debug | Exponential complexity |
+| **bayesian_opt** | Many parameters (> 3), large range | Efficient, converges faster | Requires more setup |
 
 **OptConfig**
 
-+-----------------------------------------------------------------------------+
-| \@dataclass                                                                 |
-|                                                                             |
-| class OptConfig:                                                            |
-|                                                                             |
-| n_trials: int = 100 \# untuk bayesian                                       |
-|                                                                             |
-| n_jobs: int = -1 \# parallel (-1 = semua core)                              |
-|                                                                             |
-| objective: str = \'sharpe\' \# sharpe \| sortino \| calmar \| profit_factor |
-|                                                                             |
-| min_trades: int = 30 \# abaikan trial dengan trade \< N                     |
-|                                                                             |
-| timeout_seconds: int = 3600 \# max waktu optimasi                           |
-|                                                                             |
-| sampler: str = \'tpe\' \# tpe \| random \| cma-es                           |
-+-----------------------------------------------------------------------------+
+```python
+@dataclass
+class OptConfig:
+    n_trials:        int = 100        # for bayesian
+    n_jobs:          int = -1         # parallel (-1 = all cores)
+    objective:       str = 'sharpe'   # sharpe | sortino | calmar | profit_factor
+    min_trades:      int = 30         # skip trials with trade count < N
+    timeout_seconds: int = 3600       # max optimization time
+    sampler:         str = 'tpe'      # tpe | random | cma-es
+```
 
-**7. Dependency & Integrasi dengan Runtime**
+---
 
-**7.1 Dependency Antar File**
+## 7. Dependencies & Integration with Runtime
 
-  -------------------------------------------------------------------------------------------------------------------
-  **File**                 **Depends On**                                  **Output Dikonsumsi Oleh**
-  ------------------------ ----------------------------------------------- ------------------------------------------
-  fetch_data.py            Exchange API (ccxt)                             clean_data.py
+### 7.1 File Dependencies
 
-  clean_data.py            fetch_data.py output                            resample_data.py, feature_engineering.py
+| File | Depends On | Output Consumed By |
+|---|---|---|
+| `fetch_data.py` | Exchange API (ccxt) | clean_data.py |
+| `clean_data.py` | fetch_data.py output | resample_data.py, feature_engineering.py |
+| `resample_data.py` | clean_data.py output | feature_engineering.py |
+| `feature_engineering.py` | clean/resample output | train.py, engine.py, leakage_check.py |
+| `leakage_check.py` | feature_engineering.py output | train.py (gate) |
+| `train.py` | features/*.parquet + leakage_check passed | evaluate.py, model_registry.py |
+| `walk_forward.py` | features/*.parquet + TrainConfig | evaluate.py |
+| `evaluate.py` | TrainedModel + WalkForwardSummary | engine.py (gate), model_registry.py |
+| `engine.py` | features/ + orderbook_samples/ + TrainedModel | metrics.py, report.py |
+| `metrics.py` | BacktestResult | report.py, tuner.py |
+| `model_registry.py` | TrainedModel + metadata.json | automation/deploy.py |
 
-  resample_data.py         clean_data.py output                            feature_engineering.py
+---
 
-  feature_engineering.py   clean/resample output                           train.py, engine.py, leakage_check.py
+### 7.2 Interface Contract with Runtime
 
-  leakage_check.py         feature_engineering.py output                   train.py (gate)
+These are the interfaces that must maintain compatibility. Changes here require coordination with runtime.
 
-  train.py                 features/\*.parquet + leakage_check lulus       evaluate.py, model_registry.py
+| Artifact | Format | Required Fields | Consumed By |
+|---|---|---|---|
+| `*.pkl` | joblib/pickle | model object + predict(X) method + feature_names | runtime/agent/models/ |
+| `metadata.json` | JSON | feature_names (ordered list), version, threshold | runtime core/config.py |
+| `best_params.json` | JSON | strategy params matching strategy_layer/ | runtime strategy_layer/ |
+| `FeatureConfig` | Python dataclass | Exactly as used in feature_engineering.py | runtime data_layer/ |
 
-  walk_forward.py          features/\*.parquet + TrainConfig               evaluate.py
+> **VERSIONING RULE:** Every time `feature_names` changes (add/remove/reorder), the model version MUST do a major version bump (1.x.x → 2.0.0). Runtime must not use the new model without updating its feature pipeline.
 
-  evaluate.py              TrainedModel + WalkForwardSummary               engine.py (gate), model_registry.py
+---
 
-  engine.py                features/ + orderbook_samples/ + TrainedModel   metrics.py, report.py
+### 7.3 Python Dependencies
 
-  metrics.py               BacktestResult                                  report.py, tuner.py
+| Library | Min Version | Used In | Notes |
+|---|---|---|---|
+| pandas | 2.0+ | All files | Use pyarrow backend for Parquet |
+| numpy | 1.24+ | All files | — |
+| lightgbm | 4.0+ | train.py | Primary model |
+| scikit-learn | 1.3+ | train.py, evaluate.py, walk_forward | Metrics, pipeline |
+| ta-lib | 0.4+ | feature_engineering.py | Requires C library install first |
+| pandas-ta | 0.3+ | feature_engineering.py | Alternative to ta-lib, pure Python |
+| ccxt | 4.0+ | fetch_data.py | Unified exchange API |
+| optuna | 3.0+ | bayesian_opt.py | Bayesian optimization |
+| joblib | 1.3+ | train.py, model_registry.py | Model serialization |
+| pyarrow | 12.0+ | All Parquet read/write | Parquet backend for pandas |
 
-  model_registry.py        TrainedModel + metadata.json                    automation/deploy.py
-  -------------------------------------------------------------------------------------------------------------------
+---
 
-**7.2 Kontrak Interface dengan Runtime**
+## 8. Checklist Before Deploying Model to Runtime
 
-Ini adalah interface yang harus dijaga kompatibilitasnya. Perubahan di sini membutuhkan koordinasi dengan runtime.
+All of the following checklist items MUST be satisfied before the model is moved to `runtime/agent/models/`. Check every point.
 
-  -------------------------------------------------------------------------------------------------------------------
-  **Artefak**        **Format**         **Field WAJIB**                                     **Yang Mengkonsumsi**
-  ------------------ ------------------ --------------------------------------------------- -------------------------
-  \*.pkl             joblib/pickle      model object + predict(X) method + feature_names    runtime/agent/models/
+| No | Checklist Item | Verification Method | Responsible |
+|---|---|---|---|
+| 1 | `data_quality.py` passed=True for all training data | `run_quality_report()` — check the `passed` field | Data Engineer |
+| 2 | `leakage_check.py` returned True | `check_temporal_leakage()` does not raise | Data Engineer |
+| 3 | Walk-forward IC > 0.05 and ICIR > 0.5 | `WalkForwardSummary.ic_mean` & `icir` | ML Engineer |
+| 4 | `evaluate.py` passed all thresholds | No `ModelNotReadyError` raised | ML Engineer |
+| 5 | Backtest OOS Sharpe ≥ 1.0 and Max DD < 20% | `metrics.py` report for OOS period | Quant |
+| 6 | IS vs OOS Sharpe degradation < 40% | `sharpe_oos >= sharpe_is * 0.6` | Quant |
+| 7 | `feature_names` in metadata.json matches runtime pipeline | `python -c 'import json; check_features()'` | ML Engineer |
+| 8 | `metadata.json` contains all required fields | JSON schema validation | ML Engineer |
+| 9 | `model_registry.py` status = 'validated' | Load from registry, check status | ML Engineer |
+| 10 | Backtest has at least 30 trades in OOS period | `BacktestResult.total_trades >= 30` | Quant |
+| 11 | No runtime dependencies inside research/ | `grep -r 'from runtime' research/` | Dev |
+| 12 | Paper trading run for at least 1 week before live | Paper mode log shows normal signals | Ops |
 
-  metadata.json      JSON               feature_names (ordered list), version, threshold    runtime core/config.py
+---
 
-  best_params.json   JSON               strategy params yang match dengan strategy_layer/   runtime strategy_layer/
+## 9. Experiments — Recording Convention
 
-  FeatureConfig      Python dataclass   Sama persis yang dipakai feature_engineering.py     runtime data_layer/
-  -------------------------------------------------------------------------------------------------------------------
+Every experiment must be documented to avoid repeating the same work. The minimum required format:
 
-  ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  **ATURAN VERSIONING:** Setiap kali feature_names berubah (tambah/hapus/ganti urutan), versi model WAJIB naik major version (1.x.x → 2.0.0). Runtime tidak boleh menggunakan model baru tanpa update feature pipeline-nya.
+```
+experiments/
+├── 2024_11_exp001_rsi_ema_baseline/
+│   ├── README.md       ← hypothesis, results, conclusion
+│   ├── notebook.ipynb  ← exploration code
+│   ├── results.json    ← final metrics
+│   └── config.yaml     ← config used
+├── 2024_11_exp002_add_funding_feature/
+│   └── ...
+```
 
-  ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+**Experiment README.md Template**
 
-**7.3 Python Dependencies**
+```markdown
+# Exp-001: RSI + EMA Baseline
 
-  ------------------------------------------------------------------------------------------------------------
-  **Library**    **Versi Min**   **Digunakan di**                      **Catatan**
-  -------------- --------------- ------------------------------------- ---------------------------------------
-  pandas         2.0+            Semua file                            Gunakan pyarrow backend untuk Parquet
+## Hypothesis
+A model with RSI(14) and EMA crossover features is sufficient
+to achieve IC > 0.05 on BTCUSDT 1H.
 
-  numpy          1.24+           Semua file                            ---
+## Config
+- Symbol: BTCUSDT, TF: 1H, Period: 2021-01-01 – 2023-12-31
+- Model: LightGBM default params
+- Target: target_return_4h
 
-  lightgbm       4.0+            train.py                              Model utama
+## Results
+- IC mean: 0.062  ICIR: 1.21  Dir Acc: 53.1%
+- Backtest OOS Sharpe: 0.94  Max DD: 18.2%
 
-  scikit-learn   1.3+            train.py, evaluate.py, walk_forward   Metrics, pipeline
+## Conclusion
+Hypothesis PARTIALLY met. IC passes but Sharpe does not.
+Next: try adding volatility features (exp-002).
 
-  ta-lib         0.4+            feature_engineering.py                Perlu install C library dulu
+## Decision
+NOT deploying. Moving to exp-002.
+```
 
-  pandas-ta      0.3+            feature_engineering.py                Alternatif ta-lib, pure Python
+---
 
-  ccxt           4.0+            fetch_data.py                         Unified exchange API
-
-  optuna         3.0+            bayesian_opt.py                       Bayesian optimization
-
-  joblib         1.3+            train.py, model_registry.py           Serialisasi model
-
-  pyarrow        12.0+           Semua read/write Parquet              Backend Parquet untuk pandas
-  ------------------------------------------------------------------------------------------------------------
-
-**8. Checklist Sebelum Deploy Model ke Runtime**
-
-Seluruh checklist berikut WAJIB terpenuhi sebelum model dipindahkan ke runtime/agent/models/. Tandai setiap poin.
-
-  -------------------------------------------------------------------------------------------------------------------------------------
-  **No**   **Checklist Item**                                             **Cara Verifikasi**                           **PIC**
-  -------- -------------------------------------------------------------- --------------------------------------------- ---------------
-  1        data_quality.py passed=True untuk semua data train             run_quality_report() --- cek field passed     Data Engineer
-
-  2        leakage_check.py returned True                                 check_temporal_leakage() tidak raise          Data Engineer
-
-  3        Walk-forward IC \> 0.05 dan ICIR \> 0.5                        WalkForwardSummary.ic_mean & icir             ML Engineer
-
-  4        evaluate.py lulus semua threshold                              Tidak ada ModelNotReadyError                  ML Engineer
-
-  5        Backtest OOS Sharpe ≥ 1.0 dan Max DD \< 20%                    metrics.py report OOS period                  Quant
-
-  6        Degradasi IS vs OOS \< 40% untuk Sharpe                        sharpe_oos \>= sharpe_is \* 0.6               Quant
-
-  7        feature_names di metadata.json match dengan runtime pipeline   python -c \'import json; check_features()\'   ML Engineer
-
-  8        metadata.json berisi semua field wajib                         Validasi schema JSON                          ML Engineer
-
-  9        model_registry.py status = \'validated\'                       load dari registry, cek status                ML Engineer
-
-  10       Backtest minimal 30 trade di OOS period                        BacktestResult.total_trades \>= 30            Quant
-
-  11       Tidak ada dependency runtime di dalam research/                grep -r \'from runtime\' research/            Dev
-
-  12       Paper trading dijalankan minimal 1 minggu sebelum live         Log paper mode menunjukkan sinyal normal      Ops
-  -------------------------------------------------------------------------------------------------------------------------------------
-
-**9. Experiments --- Konvensi Pencatatan**
-
-Setiap eksperimen harus dicatat agar tidak mengulang pekerjaan yang sama. Format minimal yang harus ada:
-
-+------------------------------------------------+
-| experiments/                                   |
-|                                                |
-| ├── 2024_11_exp001_rsi_ema_baseline/           |
-|                                                |
-| │ ├── README.md ← hipotesis, hasil, kesimpulan |
-|                                                |
-| │ ├── notebook.ipynb ← kode eksplorasi         |
-|                                                |
-| │ ├── results.json ← metrik final              |
-|                                                |
-| │ └── config.yaml ← config yang dipakai        |
-|                                                |
-| ├── 2024_11_exp002_add_funding_feature/        |
-|                                                |
-| │ └── \...                                     |
-+------------------------------------------------+
-
-**Template README.md Eksperimen**
-
-+----------------------------------------------------------------+
-| \# Exp-001: RSI + EMA Baseline                                 |
-|                                                                |
-| \## Hipotesis                                                  |
-|                                                                |
-| Model dengan fitur RSI(14) dan EMA crossover sudah cukup untuk |
-|                                                                |
-| mendapatkan IC \> 0.05 pada BTCUSDT 1H.                        |
-|                                                                |
-| \## Config                                                     |
-|                                                                |
-| \- Symbol: BTCUSDT, TF: 1H, Period: 2021-01-01 -- 2023-12-31   |
-|                                                                |
-| \- Model: LightGBM default params                              |
-|                                                                |
-| \- Target: target_return_4h                                    |
-|                                                                |
-| \## Hasil                                                      |
-|                                                                |
-| \- IC mean: 0.062 ICIR: 1.21 Dir Acc: 53.1%                    |
-|                                                                |
-| \- Backtest OOS Sharpe: 0.94 Max DD: 18.2%                     |
-|                                                                |
-| \## Kesimpulan                                                 |
-|                                                                |
-| Hipotesis SEBAGIAN terpenuhi. IC lulus tapi Sharpe belum.      |
-|                                                                |
-| Next: coba tambah volatility features (exp-002).               |
-|                                                                |
-| \## Keputusan                                                  |
-|                                                                |
-| TIDAK deploy. Lanjut ke exp-002.                               |
-+----------------------------------------------------------------+
-
-+:--------------------------------------------------------------------------------------------------------------:+
-| **Dokumen ini adalah kontrak implementasi Research Layer.**                                                    |
-|                                                                                                                |
-| Setiap perubahan interface publik atau config key default WAJIB diupdate di sini sebelum merge ke main branch. |
-+----------------------------------------------------------------------------------------------------------------+
+> **This document is the implementation contract for the Research Layer.**
+> Any changes to public interfaces or config key defaults
+> **MUST** be updated here before merging to the main branch.
