@@ -3,6 +3,7 @@ engine.py — Event-Driven Backtest Engine
 Proses candle satu per satu secara kronologis.
 ATURAN: Signal candle T di-fill pada open candle T+1 (lookahead protection).
 """
+
 from __future__ import annotations
 
 import logging
@@ -56,10 +57,20 @@ class Trade:
     entry_price: float
     exit_price: float
     qty: float
-    pnl: float
+    gross_pnl: float
+    net_pnl: float
     pnl_pct: float
     exit_reason: str
-    commission: float
+    entry_fee: float
+    exit_fee: float
+    slippage_cost: float
+    funding_cost: float
+    commission: float  # total commission (entry_fee + exit_fee), kept for backward compat
+
+    @property
+    def pnl(self) -> float:
+        """Alias for net_pnl. Retained for backward compatibility."""
+        return self.net_pnl
 
 
 @dataclass
@@ -74,8 +85,9 @@ class BacktestResult:
 class StrategyProtocol(Protocol):
     """Kontrak minimal yang harus dipenuhi oleh strategy."""
 
-    def on_candle(self, candle: dict, position: Position | None, equity: float) -> Signal | None:
-        ...
+    def on_candle(
+        self, candle: dict, position: Position | None, equity: float
+    ) -> Signal | None: ...
 
 
 class BacktestEngine:
@@ -125,7 +137,7 @@ class BacktestEngine:
                 if exit_reason:
                     trade = self._close_position(position, exit_price, i, exit_reason, equity)
                     trades.append(trade)
-                    equity += trade.pnl - trade.commission
+                    equity += trade.net_pnl
                     position = None
                 else:
                     # Update trailing
@@ -176,7 +188,7 @@ class BacktestEngine:
             last = df.iloc[-1]
             trade = self._close_position(position, last["close"], n - 1, "end_of_data", equity)
             trades.append(trade)
-            equity += trade.pnl - trade.commission
+            equity += trade.net_pnl
 
         log.info(
             f"Backtest selesai: {len(trades)} trades, "
@@ -262,14 +274,36 @@ class BacktestEngine:
     def _close_position(
         self, pos: Position, exit_price: float, bar: int, reason: str, equity: float
     ) -> Trade:
-        """Tutup posisi dan hitung realized PnL."""
-        if pos.side == "LONG":
-            pnl = (exit_price - pos.entry_price) * pos.qty
-        else:
-            pnl = (pos.entry_price - exit_price) * pos.qty
+        """Tutup posisi dan hitung realized PnL.
 
-        commission = (pos.entry_price * pos.qty + exit_price * pos.qty) * self.cfg.commission_pct
-        pnl_pct = pnl / (pos.entry_price * pos.qty) * 100 if pos.entry_price > 0 else 0
+        Accounting:
+          gross_pnl = price movement profit/loss (before all costs)
+          entry_fee = entry_notional * commission_pct
+          exit_fee  = exit_notional * commission_pct
+          net_pnl   = gross_pnl - entry_fee - exit_fee - slippage_cost - funding_cost
+
+        Commission is deducted EXACTLY ONCE, inside net_pnl.
+        Equity must be updated with net_pnl only.
+        """
+        # Gross PnL: pure price movement
+        if pos.side == "LONG":
+            gross_pnl = (exit_price - pos.entry_price) * pos.qty
+        else:
+            gross_pnl = (pos.entry_price - exit_price) * pos.qty
+
+        # Cost breakdown
+        entry_notional = pos.entry_price * pos.qty
+        exit_notional = exit_price * pos.qty
+        entry_fee = entry_notional * self.cfg.commission_pct
+        exit_fee = exit_notional * self.cfg.commission_pct
+        slippage_cost = 0.0  # placeholder for future slippage model
+        funding_cost = 0.0  # placeholder for future funding rate model
+
+        # Net PnL: single deduction of all costs
+        commission = entry_fee + exit_fee
+        net_pnl = gross_pnl - entry_fee - exit_fee - slippage_cost - funding_cost
+
+        pnl_pct = gross_pnl / entry_notional * 100 if pos.entry_price > 0 else 0
 
         return Trade(
             entry_bar=pos.entry_bar,
@@ -278,8 +312,13 @@ class BacktestEngine:
             entry_price=pos.entry_price,
             exit_price=exit_price,
             qty=pos.qty,
-            pnl=pnl - commission,
+            gross_pnl=gross_pnl,
+            net_pnl=net_pnl,
             pnl_pct=pnl_pct,
             exit_reason=reason,
+            entry_fee=entry_fee,
+            exit_fee=exit_fee,
+            slippage_cost=slippage_cost,
+            funding_cost=funding_cost,
             commission=commission,
         )
