@@ -1,0 +1,505 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="53" skipped="0" tests="376" time="3.264" timestamp="2026-06-09T11:58:42.020673+07:00" hostname="DESKTOP-C4BRPKA"><testcase classname="tests.unit.test_backtest_accounting.TestAccountingWinningLong" name="test_single_winning_trade_net_pnl" time="0.006" /><testcase classname="tests.unit.test_backtest_accounting.TestAccountingWinningLong" name="test_single_winning_trade_final_equity" time="0.003" /><testcase classname="tests.unit.test_backtest_accounting.TestAccountingWinningLong" name="test_equity_invariant" time="0.002" /><testcase classname="tests.unit.test_backtest_accounting.TestAccountingLosingLong" name="test_single_losing_trade_net_pnl" time="0.001" /><testcase classname="tests.unit.test_backtest_accounting.TestAccountingLosingLong" name="test_single_losing_trade_final_equity" time="0.001" /><testcase classname="tests.unit.test_backtest_accounting.TestAccountingLosingLong" name="test_losing_trade_equity_invariant" time="0.002" /><testcase classname="tests.unit.test_backtest_accounting.TestAccountingNetPnlInvariant" name="test_net_pnl_decomposition" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestGapAwareExits" name="test_long_gap_below_stop" time="0.002" /><testcase classname="tests.unit.test_backtest_engine.TestGapAwareExits" name="test_short_gap_above_stop" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestGapAwareExits" name="test_long_favorable_gap_beyond_tp" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestGapAwareExits" name="test_short_favorable_gap_beyond_tp" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestIntrabarPolicy" name="test_long_ambiguous_conservative" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestIntrabarPolicy" name="test_long_ambiguous_optimistic" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestIntrabarPolicy" name="test_short_ambiguous_conservative" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestIntrabarPolicy" name="test_short_ambiguous_optimistic" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestIntrabarPolicy" name="test_ambiguous_event_recorded" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestIntrabarPolicy" name="test_ambiguous_skip_exclusion" time="0.006" /><testcase classname="tests.unit.test_backtest_engine.TestIntrabarPolicy" name="test_default_policy_is_conservative" time="0.000" /><testcase classname="tests.unit.test_backtest_engine.TestRMultiple" name="test_winning_trade_positive_r" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestRMultiple" name="test_losing_trade_negative_r" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestRMultiple" name="test_fees_reduce_realized_r" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestRMultiple" name="test_slippage_reduces_realized_r" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestRMultiple" name="test_moving_stop_does_not_change_initial_risk" time="0.002" /><testcase classname="tests.unit.test_backtest_engine.TestForcedClose" name="test_end_of_data_long_close" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestForcedClose" name="test_end_of_data_short_close" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestForcedClose" name="test_end_of_data_uses_normal_accounting" time="0.002" /><testcase classname="tests.unit.test_backtest_engine.TestForcedClose" name="test_commission_still_deducted_once" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestForcedClose" name="test_equity_invariant" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestRMultipleFormula" name="test_r_multiple_formula_consistency" time="0.001" /><testcase classname="tests.unit.test_backtest_engine.TestDeterministicSlippage" name="test_long_slippage_impact" time="0.002" /><testcase classname="tests.unit.test_backtest_engine.TestDeterministicSlippage" name="test_short_slippage_impact" time="0.002" /><testcase classname="tests.unit.test_backtest_engine.TestDeterministicSlippage" name="test_commission_accounting_remains_correct" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestAdverseSlippage" name="test_long_entry_adverse_slippage" time="0.000" /><testcase classname="tests.unit.test_backtest_execution.TestAdverseSlippage" name="test_short_entry_adverse_slippage" time="0.000" /><testcase classname="tests.unit.test_backtest_execution.TestAdverseSlippage" name="test_long_exit_adverse_slippage" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestAdverseSlippage" name="test_short_exit_adverse_slippage" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestAdverseSlippage" name="test_zero_slippage" time="0.000" /><testcase classname="tests.unit.test_backtest_execution.TestFillBasedLevels" name="test_long_sl_tp_from_fill" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestFillBasedLevels" name="test_short_sl_tp_from_fill" time="0.000" /><testcase classname="tests.unit.test_backtest_execution.TestPlannedRRPreserved" name="test_long_rr_preserved" time="0.000" /><testcase classname="tests.unit.test_backtest_execution.TestPlannedRRPreserved" name="test_short_rr_preserved" time="0.000" /><testcase classname="tests.unit.test_backtest_execution.TestInvalidStopRejected" name="test_invalid_long_stop_rejected" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestInvalidStopRejected" name="test_invalid_short_stop_rejected" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestInvalidStopRejected" name="test_invalid_target_rr_rejected" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestCommissionRegressionWithSlippage" name="test_net_pnl_decomposition_with_slippage" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestEquityInvariantWithSlippage" name="test_equity_invariant_long_with_slippage" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestEquityInvariantWithSlippage" name="test_equity_invariant_short_with_slippage" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestEngineSlippageIntegration" name="test_long_entry_fill_has_adverse_slippage" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestEngineSlippageIntegration" name="test_short_entry_fill_has_adverse_slippage" time="0.002" /><testcase classname="tests.unit.test_backtest_execution.TestSignalToDistances" name="test_long_signal_conversion" time="0.001" /><testcase classname="tests.unit.test_backtest_execution.TestSignalToDistances" name="test_short_signal_conversion" time="0.000" /><testcase classname="tests.unit.test_backtest_execution.TestSignalToDistances" name="test_fallback_on_zero_stop_distance" time="0.000" /><testcase classname="tests.unit.test_config" name="test_load_default_config" time="0.002" /><testcase classname="tests.unit.test_config" name="test_yaml_override" time="0.004" /><testcase classname="tests.unit.test_config" name="test_env_override" time="0.002" /><testcase classname="tests.unit.test_config" name="test_env_override_false" time="0.001" /><testcase classname="tests.unit.test_config" name="test_validation_error" time="0.002" /><testcase classname="tests.unit.test_config" name="test_timeframe_validation_error" time="0.002" /><testcase classname="tests.unit.test_config" name="test_global_max_leverage_spot" time="0.002" /><testcase classname="tests.unit.test_data_layer.TestRateLimiter" name="test_acquire_tracks_weight" time="0.001"><failure message="TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'">self = &lt;tests.unit.test_data_layer.TestRateLimiter object at 0x0000023C842A8B90&gt;
+
+    def test_acquire_tracks_weight(self):
+&gt;       rl = BinanceRateLimiter(weight_limit=1200, safe_ratio=0.80)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'
+
+tests\unit\test_data_layer.py:94: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestRateLimiter" name="test_is_near_limit" time="0.001"><failure message="TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'">self = &lt;tests.unit.test_data_layer.TestRateLimiter object at 0x0000023C84732D50&gt;
+
+    def test_is_near_limit(self):
+&gt;       rl = BinanceRateLimiter(weight_limit=100, safe_ratio=0.80)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'
+
+tests\unit\test_data_layer.py:100: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestRateLimiter" name="test_not_near_limit" time="0.001"><failure message="TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'">self = &lt;tests.unit.test_data_layer.TestRateLimiter object at 0x0000023C842023F0&gt;
+
+    def test_not_near_limit(self):
+&gt;       rl = BinanceRateLimiter(weight_limit=100)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'
+
+tests\unit\test_data_layer.py:105: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestRateLimiter" name="test_update_from_headers" time="0.001"><failure message="TypeError: BinanceRateLimiter.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestRateLimiter object at 0x0000023C84716D70&gt;
+
+    def test_update_from_headers(self):
+&gt;       rl = BinanceRateLimiter()
+             ^^^^^^^^^^^^^^^^^^^^
+E       TypeError: BinanceRateLimiter.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:110: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestRateLimiter" name="test_status_output" time="0.001"><failure message="TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'">self = &lt;tests.unit.test_data_layer.TestRateLimiter object at 0x0000023C8427B0B0&gt;
+
+    def test_status_output(self):
+&gt;       rl = BinanceRateLimiter(weight_limit=1200)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: BinanceRateLimiter.__init__() got an unexpected keyword argument 'weight_limit'
+
+tests\unit\test_data_layer.py:123: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_valid_candle" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84732E90&gt;
+
+    def test_valid_candle(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:137: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_invalid_ohlc_logic" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84732FD0&gt;
+
+    def test_invalid_ohlc_logic(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:144: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_negative_price" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84717100&gt;
+
+    def test_negative_price(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:152: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_valid_ticker" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84717230&gt;
+
+    def test_valid_ticker(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:158: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_crossed_book_ticker" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84778DD0&gt;
+
+    def test_crossed_book_ticker(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:164: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_valid_orderbook" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C83FB1F20&gt;
+
+    def test_valid_orderbook(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:171: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_empty_orderbook" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84322F10&gt;
+
+    def test_empty_orderbook(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:177: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_validation_stats" time="0.001"><failure message="TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84BB4D50&gt;
+
+    def test_validation_stats(self):
+&gt;       v = DataValidator()
+            ^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:188: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestValidator" name="test_timestamp_gap_warning" time="0.001"><failure message="TypeError: DataValidator.__init__() got an unexpected keyword argument 'max_gap_multiplier'">self = &lt;tests.unit.test_data_layer.TestValidator object at 0x0000023C84BB4F50&gt;
+
+    def test_timestamp_gap_warning(self):
+&gt;       v = DataValidator(max_gap_multiplier=2)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: DataValidator.__init__() got an unexpected keyword argument 'max_gap_multiplier'
+
+tests\unit\test_data_layer.py:196: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_price_spike" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() got an unexpected keyword argument 'price_spike_threshold'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84733110&gt;
+
+    def test_price_spike(self):
+&gt;       ad = AnomalyDetector(price_spike_threshold=0.03)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() got an unexpected keyword argument 'price_spike_threshold'
+
+tests\unit\test_data_layer.py:212: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_no_spike" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() got an unexpected keyword argument 'price_spike_threshold'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84733250&gt;
+
+    def test_no_spike(self):
+&gt;       ad = AnomalyDetector(price_spike_threshold=0.05)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() got an unexpected keyword argument 'price_spike_threshold'
+
+tests\unit\test_data_layer.py:221: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_volume_zero" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84717360&gt;
+
+    def test_volume_zero(self):
+&gt;       ad = AnomalyDetector()
+             ^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:228: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_crossed_book_ticker" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84717490&gt;
+
+    def test_crossed_book_ticker(self):
+&gt;       ad = AnomalyDetector()
+             ^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:234: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_wide_spread" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() got an unexpected keyword argument 'wide_spread_pct'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84778EF0&gt;
+
+    def test_wide_spread(self):
+&gt;       ad = AnomalyDetector(wide_spread_pct=0.5)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() got an unexpected keyword argument 'wide_spread_pct'
+
+tests\unit\test_data_layer.py:240: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_is_safe_to_trade_clean" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84323790&gt;
+
+    def test_is_safe_to_trade_clean(self):
+&gt;       ad = AnomalyDetector()
+             ^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:246: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_is_safe_to_trade_blocked" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84BA8380&gt;
+
+    def test_is_safe_to_trade_blocked(self):
+&gt;       ad = AnomalyDetector()
+             ^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:252: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestAnomalyDetector" name="test_resolve_anomaly" time="0.001"><failure message="TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'">self = &lt;tests.unit.test_data_layer.TestAnomalyDetector object at 0x0000023C84BB5850&gt;
+
+    def test_resolve_anomaly(self):
+&gt;       ad = AnomalyDetector()
+             ^^^^^^^^^^^^^^^^^
+E       TypeError: AnomalyDetector.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_data_layer.py:259: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_cache_hit" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_set_cache'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C84733390&gt;
+
+    def test_cache_hit(self):
+        mdf = MarketAPI()
+&gt;       mdf._set_cache("test", [1, 2, 3], ttl_s=60.0)
+        ^^^^^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_set_cache'
+
+tests\unit\test_data_layer.py:275: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_cache_miss" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_get_cache'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C847334D0&gt;
+
+    def test_cache_miss(self):
+        mdf = MarketAPI()
+&gt;       assert mdf._get_cache("nonexistent") is None
+               ^^^^^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_get_cache'
+
+tests\unit\test_data_layer.py:280: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_cache_expired" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_cache'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C847175C0&gt;
+
+    def test_cache_expired(self):
+        mdf = MarketAPI()
+        # Set with TTL in the past
+&gt;       mdf._cache["test"] = (0.0, "old_data")
+        ^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_cache'
+
+tests\unit\test_data_layer.py:285: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_invalidate_all" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_set_cache'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C847176F0&gt;
+
+    def test_invalidate_all(self):
+        mdf = MarketAPI()
+&gt;       mdf._set_cache("a", 1, ttl_s=60)
+        ^^^^^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_set_cache'
+
+tests\unit\test_data_layer.py:290: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_invalidate_key" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_set_cache'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C84778B90&gt;
+
+    def test_invalidate_key(self):
+        mdf = MarketAPI()
+&gt;       mdf._set_cache("a", 1, ttl_s=60)
+        ^^^^^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_set_cache'
+
+tests\unit\test_data_layer.py:297: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_parse_candles" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_parse_candles'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C84BA86B0&gt;
+
+    def test_parse_candles(self):
+        mdf = MarketAPI()
+        raw = [
+            [
+                1672531200000,
+                "50000",
+                "50500",
+                "49800",
+                "50200",
+                "100",
+                1672534800000,
+                "5000000",
+                500,
+                "50",
+                "2500000",
+                "0",
+            ],
+        ]
+&gt;       candles = mdf._parse_candles(raw, "BTCUSDT", "1h")
+                  ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_parse_candles'
+
+tests\unit\test_data_layer.py:321: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_parse_ticker" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_parse_ticker'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C84BA87C0&gt;
+
+    def test_parse_ticker(self):
+        mdf = MarketAPI()
+        raw = {"bidPrice": "50000.0", "askPrice": "50010.0"}
+&gt;       ticker = mdf._parse_ticker(raw, "BTCUSDT")
+                 ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_parse_ticker'
+
+tests\unit\test_data_layer.py:329: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestMarketAPI" name="test_parse_balance" time="0.001"><failure message="AttributeError: 'MarketAPI' object has no attribute '_parse_balance'">self = &lt;tests.unit.test_data_layer.TestMarketAPI object at 0x0000023C84BB6150&gt;
+
+    def test_parse_balance(self):
+        mdf = MarketAPI()
+        raw = {
+            "balances": [
+                {"asset": "USDT", "free": "1000.0", "locked": "200.0"},
+                {"asset": "BTC", "free": "0.5", "locked": "0.0"},
+            ]
+        }
+&gt;       bal = mdf._parse_balance(raw, "USDT")
+              ^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'MarketAPI' object has no attribute '_parse_balance'
+
+tests\unit\test_data_layer.py:341: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_set_and_get_snapshot" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84733610&gt;
+
+    def test_set_and_get_snapshot(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:353: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_imbalance" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84733750&gt;
+
+    def test_imbalance(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:361: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_imbalance_balanced" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84717820&gt;
+
+    def test_imbalance_balanced(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:372: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_estimate_fill_price_buy" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84717950&gt;
+
+    def test_estimate_fill_price_buy(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:382: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_update_incremental" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84778A70&gt;
+
+    def test_update_incremental(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:396: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_update_remove_level" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84BA88D0&gt;
+
+    def test_update_remove_level(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:416: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_is_fresh" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84BA89E0&gt;
+
+    def test_is_fresh(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:434: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_no_snapshot" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84BB6A50&gt;
+
+    def test_no_snapshot(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:440: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestOrderbookManager" name="test_bid_ask_depth" time="0.001"><failure message="NameError: name 'OrderbookManager' is not defined">self = &lt;tests.unit.test_data_layer.TestOrderbookManager object at 0x0000023C84BB6C50&gt;
+
+    def test_bid_ask_depth(self):
+&gt;       om = OrderbookManager()
+             ^^^^^^^^^^^^^^^^
+E       NameError: name 'OrderbookManager' is not defined
+
+tests\unit\test_data_layer.py:446: NameError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestWebSocketClient" name="test_subscribe_candle" time="0.001"><failure message="AttributeError: 'WebSocketClient' object has no attribute '_streams'">self = &lt;tests.unit.test_data_layer.TestWebSocketClient object at 0x0000023C84733890&gt;
+
+    def test_subscribe_candle(self):
+        ws = WebSocketClient()
+    
+        async def dummy(c: Candle) -&gt; None:
+            pass
+    
+        ws.subscribe_candle("BTCUSDT", "1h", dummy)
+&gt;       assert "btcusdt@kline_1h" in ws._streams
+                                     ^^^^^^^^^^^
+E       AttributeError: 'WebSocketClient' object has no attribute '_streams'
+
+tests\unit\test_data_layer.py:471: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestWebSocketClient" name="test_subscribe_ticker" time="0.001"><failure message="AttributeError: 'WebSocketClient' object has no attribute '_streams'">self = &lt;tests.unit.test_data_layer.TestWebSocketClient object at 0x0000023C847339D0&gt;
+
+    def test_subscribe_ticker(self):
+        ws = WebSocketClient()
+    
+        async def dummy(t: Ticker) -&gt; None:
+            pass
+    
+        ws.subscribe_ticker("BTCUSDT", dummy)
+&gt;       assert "btcusdt@bookTicker" in ws._streams
+                                       ^^^^^^^^^^^
+E       AttributeError: 'WebSocketClient' object has no attribute '_streams'
+
+tests\unit\test_data_layer.py:481: AttributeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestWebSocketClient" name="test_connect_disconnect" time="0.002"><failure message="TypeError: WebSocketClient.is_connected() takes 1 positional argument but 2 were given">self = &lt;tests.unit.test_data_layer.TestWebSocketClient object at 0x0000023C84717A80&gt;
+
+    def test_connect_disconnect(self):
+        ws = WebSocketClient()
+    
+        async def dummy(c: Candle) -&gt; None:
+            pass
+    
+        ws.subscribe_candle("BTCUSDT", "1h", dummy)
+    
+        async def run() -&gt; None:
+            await ws.connect()
+            assert ws.is_connected("BTCUSDT") is True
+            await ws.disconnect()
+            assert ws._running is False
+    
+&gt;       asyncio.run(run())
+
+tests\unit\test_data_layer.py:497: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\Majagatha\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py:204: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\Majagatha\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Majagatha\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def run() -&gt; None:
+        await ws.connect()
+&gt;       assert ws.is_connected("BTCUSDT") is True
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: WebSocketClient.is_connected() takes 1 positional argument but 2 were given
+
+tests\unit\test_data_layer.py:493: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestWebSocketClient" name="test_connection_stats" time="0.001"><failure message="TypeError: argument of type 'ConnectionStats' is not a container or iterable">self = &lt;tests.unit.test_data_layer.TestWebSocketClient object at 0x0000023C84717BB0&gt;
+
+    def test_connection_stats(self):
+        ws = WebSocketClient()
+    
+        async def dummy(c: Candle) -&gt; None:
+            pass
+    
+        ws.subscribe_candle("BTCUSDT", "1h", dummy)
+    
+        async def run() -&gt; None:
+            await ws.connect()
+            stats = ws.get_connection_stats()
+            assert "btcusdt@kline_1h" in stats
+            assert stats["btcusdt@kline_1h"]["state"] == "connected"
+            await ws.disconnect()
+    
+&gt;       asyncio.run(run())
+
+tests\unit\test_data_layer.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\Majagatha\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py:204: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\Majagatha\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\Majagatha\AppData\Local\Python\pythoncore-3.14-64\Lib\asyncio\base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def run() -&gt; None:
+        await ws.connect()
+        stats = ws.get_connection_stats()
+&gt;       assert "btcusdt@kline_1h" in stats
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: argument of type 'ConnectionStats' is not a container or iterable
+
+tests\unit\test_data_layer.py:510: TypeError</failure></testcase><testcase classname="tests.unit.test_data_layer.TestWebSocketClient" name="test_record_message" time="0.001"><failure message="AttributeError: 'WebSocketClient' object has no attribute '_ensure_stream'">self = &lt;tests.unit.test_data_layer.TestWebSocketClient object at 0x0000023C84778CB0&gt;
+
+    def test_record_message(self):
+        ws = WebSocketClient()
+&gt;       ws._ensure_stream("test_stream")
+        ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'WebSocketClient' object has no attribute '_ensure_stream'
+
+tests\unit\test_data_layer.py:518: AttributeError</failure></testcase><testcase classname="tests.unit.test_encryptor" name="test_generate_key" time="0.001" /><testcase classname="tests.unit.test_encryptor" name="test_encrypt_decrypt" time="0.002" /><testcase classname="tests.unit.test_encryptor" name="test_encrypt_bytes" time="0.001" /><testcase classname="tests.unit.test_encryptor" name="test_get_master_key" time="0.001" /><testcase classname="tests.unit.test_encryptor" name="test_get_master_key_missing" time="0.001" /><testcase classname="tests.unit.test_encryptor" name="test_hash_order_id" time="0.001" /><testcase classname="tests.unit.test_event_bus" name="test_event_bus_pub_sub" time="0.128" /><testcase classname="tests.unit.test_event_bus" name="test_event_bus_queue_full" time="0.001" /><testcase classname="tests.unit.test_event_bus" name="test_event_bus_handler_error" time="0.122" /><testcase classname="tests.unit.test_exit_layer.TestStopLoss" name="test_buy_sl_hit_by_low" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestStopLoss" name="test_buy_sl_not_hit_when_low_above" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestStopLoss" name="test_sell_sl_hit_by_high" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestStopLoss" name="test_sell_sl_not_hit_when_high_below" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestStopLoss" name="test_sl_zero_no_check" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestTrailingStop" name="test_trailing_ratchet_buy_only_up" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTrailingStop" name="test_trailing_ratchet_sell_only_down" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTrailingStop" name="test_trailing_not_active_before_threshold" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTrailingStop" name="test_trailing_activates_at_threshold" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTrailingStop" name="test_trailing_exit_when_hit" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTrailingStop" name="test_deregister" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTakeProfit" name="test_single_tp_full_close" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTakeProfit" name="test_partial_tp_first_hit" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTakeProfit" name="test_partial_tp_second_hit" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestTakeProfit" name="test_tp_zero_no_check" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestTakeProfit" name="test_sell_tp_hit_by_low" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestBreakEven" name="test_breakeven_trigger" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestBreakEven" name="test_breakeven_not_trigger_below_r" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestBreakEven" name="test_breakeven_no_backward" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestBreakEven" name="test_breakeven_only_once" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestBreakEven" name="test_breakeven_sell_trigger" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestBreakEven" name="test_deregister" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestTimeout" name="test_timeout_triggered" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestTimeout" name="test_timeout_not_triggered" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestExitManagerPriority" name="test_sl_takes_precedence_over_tp" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestExitManagerPriority" name="test_strategy_exit_processed" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestExitManagerPriority" name="test_hold_when_nothing_triggers" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestHoldDecision" name="test_hold_decision_is_hold" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestRecovery" name="test_register_open_positions" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestRecovery" name="test_deregister_trade" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestPureFunction" name="test_evaluate_returns_decision" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestEdgeCases" name="test_sl_exact_hit" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestEdgeCases" name="test_tp_exact_hit" time="0.000" /><testcase classname="tests.unit.test_exit_layer.TestEdgeCases" name="test_trailing_percentage_method" time="0.001" /><testcase classname="tests.unit.test_exit_layer.TestEdgeCases" name="test_zero_risk_breakeven" time="0.000" /><testcase classname="tests.unit.test_helpers" name="test_round_qty_uses_floor" time="0.001" /><testcase classname="tests.unit.test_helpers" name="test_round_price" time="0.000" /><testcase classname="tests.unit.test_helpers" name="test_calc_pnl" time="0.000" /><testcase classname="tests.unit.test_helpers" name="test_generate_order_id" time="0.001" /><testcase classname="tests.unit.test_helpers" name="test_validate_order_id_invalid" time="0.001" /><testcase classname="tests.unit.test_helpers" name="test_other_helpers" time="0.000" /><testcase classname="tests.unit.test_helpers" name="test_validators" time="0.000" /><testcase classname="tests.unit.test_helpers" name="test_retry_async" time="0.098" /><testcase classname="tests.unit.test_helpers" name="test_retry_sync" time="0.022" /><testcase classname="tests.unit.test_intelligence_layer" name="test_volatility_calculator" time="0.002"><failure message="TypeError: VolatilityCalculator.__init__() missing 1 required positional argument: 'config'">mock_df =                            timestamp   open   high    low  close  volume
+0   2026-05-29 18:58:44.424125+00:00  100.0  ...  123.8  125.3    1000
+249 2026-06-09 03:58:44.424465+00:00  124.9  125.9  123.9  125.4    1000
+
+[250 rows x 6 columns]
+
+    def test_volatility_calculator(mock_df: pd.DataFrame):
+&gt;       calc = VolatilityCalculator()
+               ^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: VolatilityCalculator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_intelligence_layer.py:43: TypeError</failure></testcase><testcase classname="tests.unit.test_intelligence_layer" name="test_regime_classifier" time="0.002"><failure message="TypeError: RegimeClassifier.__init__() missing 1 required positional argument: 'config'">mock_df =                            timestamp   open   high    low  close  volume
+0   2026-05-29 18:58:44.442603+00:00  100.0  ...  123.8  125.3    1000
+249 2026-06-09 03:58:44.442933+00:00  124.9  125.9  123.9  125.4    1000
+
+[250 rows x 6 columns]
+
+    def test_regime_classifier(mock_df: pd.DataFrame):
+&gt;       clf = RegimeClassifier()
+              ^^^^^^^^^^^^^^^^^^
+E       TypeError: RegimeClassifier.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_intelligence_layer.py:53: TypeError</failure></testcase><testcase classname="tests.unit.test_intelligence_layer" name="test_latency_guard" time="0.001"><failure message="TypeError: LatencyGuard.__init__() missing 1 required positional argument: 'config'">def test_latency_guard():
+&gt;       guard = LatencyGuard()
+                ^^^^^^^^^^^^^^
+E       TypeError: LatencyGuard.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_intelligence_layer.py:62: TypeError</failure></testcase><testcase classname="tests.unit.test_intelligence_layer" name="test_market_state_builder" time="0.003"><failure message="TypeError: RegimeClassifier.__init__() missing 1 required positional argument: 'config'">mock_df =                            timestamp   open   high    low  close  volume
+0   2026-05-29 18:58:44.460304+00:00  100.0  ...  123.8  125.3    1000
+249 2026-06-09 03:58:44.460647+00:00  124.9  125.9  123.9  125.4    1000
+
+[250 rows x 6 columns]
+
+    @pytest.mark.asyncio
+    async def test_market_state_builder(mock_df: pd.DataFrame):
+&gt;       clf = RegimeClassifier()
+              ^^^^^^^^^^^^^^^^^^
+E       TypeError: RegimeClassifier.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_intelligence_layer.py:86: TypeError</failure></testcase><testcase classname="tests.unit.test_key_manager" name="test_key_manager_init" time="0.002" /><testcase classname="tests.unit.test_key_manager" name="test_key_manager_missing_keys" time="0.001" /><testcase classname="tests.unit.test_key_manager" name="test_rotate_key" time="0.002" /><testcase classname="tests.unit.test_key_manager" name="test_rotate_key_error" time="0.002" /><testcase classname="tests.unit.test_key_manager" name="test_validate_permissions" time="0.001" /><testcase classname="tests.unit.test_logger" name="test_agent_logger_bind" time="0.001" /><testcase classname="tests.unit.test_logger" name="test_json_formatter" time="0.001" /><testcase classname="tests.unit.test_logger" name="test_setup_structured_logging" time="0.016" /><testcase classname="tests.unit.test_models.TestEnums" name="test_market_regime_values" time="0.001" /><testcase classname="tests.unit.test_models.TestEnums" name="test_trade_status_values" time="0.001" /><testcase classname="tests.unit.test_models.TestEnums" name="test_risk_verdict_membership" time="0.000" /><testcase classname="tests.unit.test_models.TestEnums" name="test_circuit_state_values" time="0.000" /><testcase classname="tests.unit.test_models.TestEnums" name="test_order_side_values" time="0.000" /><testcase classname="tests.unit.test_models.TestEnums" name="test_order_type_values" time="0.000" /><testcase classname="tests.unit.test_models.TestEnums" name="test_time_in_force_values" time="0.000" /><testcase classname="tests.unit.test_models.TestEnums" name="test_trading_mode_values" time="0.000" /><testcase classname="tests.unit.test_models.TestEnums" name="test_enum_str_serialization" time="0.000" /><testcase classname="tests.unit.test_models.TestMarketModels" name="test_candle_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestMarketModels" name="test_candle_frozen" time="0.001" /><testcase classname="tests.unit.test_models.TestMarketModels" name="test_ticker_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestMarketModels" name="test_balance_defaults" time="0.000" /><testcase classname="tests.unit.test_models.TestMarketModels" name="test_funding_rate" time="0.000" /><testcase classname="tests.unit.test_models.TestOrderbook" name="test_orderbook_computed_fields" time="0.001" /><testcase classname="tests.unit.test_models.TestOrderbook" name="test_empty_orderbook" time="0.001" /><testcase classname="tests.unit.test_models.TestSignal" name="test_signal_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestSignal" name="test_signal_sl_validation" time="0.001" /><testcase classname="tests.unit.test_models.TestSignal" name="test_signal_negative_sl_validation" time="0.001" /><testcase classname="tests.unit.test_models.TestSignal" name="test_signal_explicit_final_confidence" time="0.001" /><testcase classname="tests.unit.test_models.TestSignal" name="test_exit_signal_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestTradeRequest" name="test_from_signal" time="0.001"><failure message="TypeError: TradeRequest.from_signal() got an unexpected keyword argument 'current_price'">self = &lt;tests.unit.test_models.TestTradeRequest object at 0x0000023C84D58B90&gt;
+
+    def test_from_signal(self):
+        sig = Signal(
+            symbol="ETHUSDT",
+            side="SELL",
+            strategy_id="mean_rev",
+            suggested_sl=3200.0,
+            suggested_tp=2800.0,
+            confidence=0.75,
+        )
+&gt;       tr = TradeRequest.from_signal(sig, current_price=3000.0, atr=50.0, available_equity=10000.0)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: TradeRequest.from_signal() got an unexpected keyword argument 'current_price'
+
+tests\unit\test_models.py:265: TypeError</failure></testcase><testcase classname="tests.unit.test_models.TestRiskResult" name="test_approved_result" time="0.001" /><testcase classname="tests.unit.test_models.TestRiskResult" name="test_warned_result" time="0.001" /><testcase classname="tests.unit.test_models.TestRiskResult" name="test_blocked_result" time="0.000" /><testcase classname="tests.unit.test_models.TestTrade" name="test_trade_mutable_status" time="0.001" /><testcase classname="tests.unit.test_models.TestTrade" name="test_trade_notional" time="0.001" /><testcase classname="tests.unit.test_models.TestTrade" name="test_trade_is_open" time="0.001" /><testcase classname="tests.unit.test_models.TestTrade" name="test_trade_hold_duration" time="0.001" /><testcase classname="tests.unit.test_models.TestTrade" name="test_trade_hold_duration_not_opened" time="0.001" /><testcase classname="tests.unit.test_models.TestOrderRequestResponse" name="test_order_request_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestOrderRequestResponse" name="test_order_response_filled" time="0.001" /><testcase classname="tests.unit.test_models.TestOrderRequestResponse" name="test_order_response_rejected" time="0.001" /><testcase classname="tests.unit.test_models.TestAudit" name="test_audit_event_creation" time="0.001" /><testcase classname="tests.unit.test_models.TestAudit" name="test_recovery_report" time="0.001" /><testcase classname="tests.unit.test_models.TestIntelligenceModels" name="test_volatility_metrics" time="0.001" /><testcase classname="tests.unit.test_models.TestIntelligenceModels" name="test_regime_result" time="0.001" /><testcase classname="tests.unit.test_models.TestIntelligenceModels" name="test_validation_result" time="0.000" /><testcase classname="tests.unit.test_models.TestIntelligenceModels" name="test_anomaly_report" time="0.000" /><testcase classname="tests.unit.test_models.TestIntelligenceModels" name="test_exchange_info" time="0.000" /><testcase classname="tests.unit.test_models.TestIntelligenceModels" name="test_rate_limit_status" time="0.000" /><testcase classname="tests.unit.test_modes" name="test_mode_config" time="0.000" /><testcase classname="tests.unit.test_modes" name="test_transition_guard_allowed" time="0.000" /><testcase classname="tests.unit.test_modes" name="test_transition_guard_forbidden" time="0.000" /><testcase classname="tests.unit.test_modes" name="test_transition_guard_has_positions" time="0.001" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_pulse_creates_file" time="0.011" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_status_dead_no_file" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_status_alive_after_pulse" time="0.037" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_status_stale" time="0.035" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_status_dead_old_pulse" time="0.020" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_status_dead_corrupt_file" time="0.021" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_set_tasks_ok" time="0.015" /><testcase classname="tests.unit.test_monitoring_layer.TestHeartbeat" name="test_stop" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_all_healthy" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_memory_degraded" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_memory_unhealthy" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_disk_low" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_circuit_breaker_halted" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_rate_limit_high" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_websocket_stale" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_ping_high" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_open_orders_high" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestHealthCheck" name="test_cached_report" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_info_only_logs" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_warning_emits_event" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_critical_emits_event_and_stderr" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_no_event_bus" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_history_limit" time="0.036" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_template_circuit_breaker" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_template_trade_opened" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_template_trade_closed" time="0.002" /><testcase classname="tests.unit.test_monitoring_layer.TestAlertManager" name="test_template_daily_summary" time="0.002" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_headline_model" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_fear_greed_model" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_aggregator_no_api_key" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_headline_summary_empty" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_headline_summary_with_data" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_fear_greed_score_default" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_fear_greed_score_cached" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_cache_freshness_logic" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_fetch_headlines_no_key" time="0.002" /><testcase classname="tests.unit.test_news_layer.TestNewsAggregator" name="test_fetch_fear_greed_mock" time="0.004" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_event_model" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_no_events_no_freeze" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_pre_event_freeze" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_post_event_freeze" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_no_freeze_after_thaw_period" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_low_impact_no_freeze" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_should_freeze_convenience" time="0.001" /><testcase classname="tests.unit.test_news_layer.TestEconomicCalendar" name="test_fetch_today_no_key" time="0.002" /><testcase classname="tests.unit.test_news_layer.TestSentimentAnalyzer" name="test_result_properties" time="0.000" /><testcase classname="tests.unit.test_news_layer.TestSentimentAnalyzer" name="test_bullish_result" time="0.000" /><testcase classname="tests.unit.test_news_layer.TestSentimentAnalyzer" name="test_neutral_result_not_extreme" time="0.000" /><testcase classname="tests.unit.test_news_layer.TestSentimentAnalyzer" name="test_fallback_no_api_key" time="0.002" /><testcase classname="tests.unit.test_news_layer.TestSentimentAnalyzer" name="test_cached_score_default" time="0.000" /><testcase classname="tests.unit.test_news_layer.TestSentimentAnalyzer" name="test_cached_score_after_set" time="0.000" /><testcase classname="tests.unit.test_news_layer.TestSentimentAnalyzer" name="test_prompt_builder" time="0.000" /><testcase classname="tests.unit.test_portfolio_layer" name="test_allocator_can_open" time="0.001"><failure message="TypeError: PortfolioAllocator.__init__() missing 1 required positional argument: 'config'">def test_allocator_can_open():
+&gt;       allocator = PortfolioAllocator()
+                    ^^^^^^^^^^^^^^^^^^^^
+E       TypeError: PortfolioAllocator.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_portfolio_layer.py:16: TypeError</failure></testcase><testcase classname="tests.unit.test_portfolio_layer" name="test_capital_manager_drawdown" time="0.001"><failure message="TypeError: CapitalManager.__init__() got an unexpected keyword argument 'initial_equity'">def test_capital_manager_drawdown():
+&gt;       cap = CapitalManager(initial_equity=10000.0)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: CapitalManager.__init__() got an unexpected keyword argument 'initial_equity'
+
+tests\unit\test_portfolio_layer.py:41: TypeError</failure></testcase><testcase classname="tests.unit.test_portfolio_layer" name="test_correlation_blocks" time="0.001"><failure message="TypeError: CorrelationController.__init__() missing 1 required positional argument: 'config'">def test_correlation_blocks():
+&gt;       corr = CorrelationController()
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: CorrelationController.__init__() missing 1 required positional argument: 'config'
+
+tests\unit\test_portfolio_layer.py:57: TypeError</failure></testcase><testcase classname="tests.unit.test_portfolio_layer" name="test_paper_equity" time="0.000" /><testcase classname="tests.unit.test_portfolio_layer" name="test_risk_budget" time="0.001"><failure message="assert 'Butuh=150.00' in &quot;Daily risk budget exceeded for 'MyStrat'. Requested: 150.00 USD. Remaining today: 100.00 USD (Budget: 500.00, Used: 400.00).&quot;">def test_risk_budget():
+        cfg = DummyConfig()
+        setattr(cfg, "max_daily_loss_pct", 0.05)  # Max loss sistem = 5%
+        setattr(cfg, "strategy_weights", {"MyStrat": 1.0})
+    
+        rm = RiskBudgetManager(cfg)
+        equity = 10000.0  # Bgt sistem = $500
+    
+        ok, _ = rm.can_take_risk("MyStrat", 100.0, equity)
+        assert ok is True
+    
+        # Kita kunci resiko -$400
+        rm.record_risk_taken("MyStrat", 400.0)
+    
+        # Coba minta risk $150 -&gt; Sisa cuma $100 ($500 - $400)
+        ok_fail, reason = rm.can_take_risk("MyStrat", 150.0, equity)
+        assert ok_fail is False
+&gt;       assert "Butuh=150.00" in reason
+E       assert 'Butuh=150.00' in "Daily risk budget exceeded for 'MyStrat'. Requested: 150.00 USD. Remaining today: 100.00 USD (Budget: 500.00, Used: 400.00)."
+
+tests\unit\test_portfolio_layer.py:109: AssertionError</failure></testcase><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_valid_request_passes" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_invalid_symbol_blocked" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_invalid_side_blocked" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_tiny_qty_blocked" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_negative_price_blocked" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_market_order_disabled" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_invalid_client_order_id" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_exchange_maintenance_blocked" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_market_halted_blocked" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_price_unavailable_blocked" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_wide_spread_warned" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_validate_all_returns_all_checks" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPreTradeCheck" name="test_validate_all_reports_failures" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestGenerateOrderId" name="test_basic_format" time="0.000" /><testcase classname="tests.unit.test_risk_layer.TestGenerateOrderId" name="test_truncation" time="0.000" /><testcase classname="tests.unit.test_risk_layer.TestGenerateOrderId" name="test_valid_client_order_id" time="0.000" /><testcase classname="tests.unit.test_risk_layer.TestGenerateOrderId" name="test_too_long_order_id" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_initial_state_normal" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_warn_on_daily_loss_3pct" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_halt_on_daily_loss_5pct" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_halt_on_drawdown_10pct" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_halt_on_consecutive_losses" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_record_win_resets_losses" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_manual_halt_and_resume" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_daily_reset" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_status_dict" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_check_from_capital_status" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestCircuitBreaker" name="test_positive_pnl_stays_normal" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_global_max_hardcoded_3x" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_config_cannot_override_above_3" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_approve_leverage_within_limit" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_block_leverage_above_limit" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_block_zero_leverage" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_get_max_leverage_all_symbols" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_effective_leverage" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestLeverageControl" name="test_effective_leverage_zero_margin" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestExposureControl" name="test_approve_small_position" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestExposureControl" name="test_block_per_symbol_overexposure" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestExposureControl" name="test_block_max_positions_reached" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestExposureControl" name="test_exposure_snapshot" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_fixed_fractional_sizing" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_kelly_with_zero_win_rate_no_crash" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_volatility_scaled_sizing" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_lot_filter_uses_floor_not_round" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_zero_equity_returns_zero" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_zero_price_returns_zero" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_below_min_notional_returns_zero" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestPositionSizer" name="test_sizing_method_fallback_on_error" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_valid_sl_passes" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_block_zero_sl_when_required" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_sl_wrong_side_buy" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_sl_wrong_side_sell" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_sl_too_close" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_sl_too_far_warning" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_compute_default_sl_with_atr" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestStopLossManager" name="test_compute_default_sl_no_atr" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_approve_normal_trade" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_block_zero_quantity" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_block_when_capital_manager_unsafe" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_paper_mode_blocked_becomes_warned" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_paper_mode_approved_stays_approved" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_circuit_breaker_halt_blocks" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_leverage_futures_blocked" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_leverage_futures_approved" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_update_equity" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_reset_daily_stats" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_get_risk_summary" time="0.001" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_sl_price_in_result" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_correlation_controller_gate" time="0.002" /><testcase classname="tests.unit.test_risk_layer.TestRiskManagerIntegration" name="test_risk_budget_gate" time="0.002" /><testcase classname="tests.unit.test_safe_mode" name="test_emergency_stop" time="0.002" /><testcase classname="tests.unit.test_safe_mode" name="test_graceful_shutdown" time="0.002" /><testcase classname="tests.unit.test_scheduler" name="test_cron_schedule" time="0.000" /><testcase classname="tests.unit.test_scheduler" name="test_scheduler_interval" time="0.002" /><testcase classname="tests.unit.test_scheduler" name="test_scheduler_cron_registration" time="0.001" /><testcase classname="tests.unit.test_scheduler" name="test_scheduler_execute_timeout" time="0.114" /><testcase classname="tests.unit.test_scheduler" name="test_scheduler_loop_start_stop" time="0.015" /><testcase classname="tests.unit.test_scheduler" name="test_scheduler_loop_execution" time="0.108" /><testcase classname="tests.unit.test_strategy_layer" name="test_spot_strategy_allowed" time="0.001" /><testcase classname="tests.unit.test_strategy_layer" name="test_spot_strategy_blocked_short" time="0.001" /><testcase classname="tests.unit.test_strategy_layer" name="test_futures_strategy_hedge" time="0.001" /><testcase classname="tests.unit.test_strategy_layer" name="test_strategy_utils_score" time="0.001" /><testcase classname="tests.unit.test_sync_layer.TestBalanceSync" name="test_sync_updates_internal" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestBalanceSync" name="test_drift_calculation" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestBalanceSync" name="test_alert_on_high_drift" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestBalanceSync" name="test_no_alert_on_small_drift" time="0.001" /><testcase classname="tests.unit.test_sync_layer.TestBalanceSync" name="test_exchange_error_graceful" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestOrderSync" name="test_sync_filled_order" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestOrderSync" name="test_sync_cancelled_order" time="0.001" /><testcase classname="tests.unit.test_sync_layer.TestOrderSync" name="test_sync_partial_fill" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestOrderSync" name="test_order_not_found_conflict" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestOrderSync" name="test_no_pending_trades" time="0.001" /><testcase classname="tests.unit.test_sync_layer.TestPositionSync" name="test_ghost_position_detected" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestPositionSync" name="test_zombie_position_detected" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestPositionSync" name="test_qty_mismatch_detected" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestPositionSync" name="test_no_discrepancies" time="0.001" /><testcase classname="tests.unit.test_sync_layer.TestPositionSync" name="test_exchange_error_graceful" time="0.002" /><testcase classname="tests.unit.test_sync_layer.TestReconciliation" name="test_daily_report_all_ok" time="0.024" /><testcase classname="tests.unit.test_sync_layer.TestReconciliation" name="test_daily_report_with_issues" time="0.003" /><testcase classname="tests.unit.test_sync_layer.TestReconciliation" name="test_daily_report_with_discrepancies" time="0.004" /><testcase classname="tests.unit.test_sync_layer.TestReconciliation" name="test_cached_last_report" time="0.003" /><testcase classname="tests.unit.test_time_utils" name="test_mock_time" time="0.000" /><testcase classname="tests.unit.test_time_utils" name="test_tf_to_seconds_and_ms" time="0.001" /><testcase classname="tests.unit.test_time_utils" name="test_candle_functions" time="0.001" /><testcase classname="tests.unit.test_time_utils" name="test_format_duration" time="0.000" /><testcase classname="tests.unit.test_time_utils" name="test_is_daily_reset_due" time="0.001" /></testsuite></testsuites>

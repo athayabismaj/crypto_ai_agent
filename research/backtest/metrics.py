@@ -5,6 +5,7 @@ Semua metrik dihitung secara konsisten dari satu sumber kebenaran.
 Deploy threshold:
   Sharpe ≥ 1.0 | Max DD < 20% | Win Rate > 45% | PF > 1.3 | Trades > 30
 """
+
 from __future__ import annotations
 
 import logging
@@ -97,7 +98,9 @@ def calculate_metrics(
     """
     Hitung semua metrik dari hasil backtest.
     """
-    total_trades = len(trades)
+    # Exclude non-metric trades
+    valid_trades = [t for t in trades if t.include_in_metrics]
+    total_trades = len(valid_trades)
     final_equity = equity_curve[-1] if equity_curve else initial_capital
 
     # ROI
@@ -122,8 +125,8 @@ def calculate_metrics(
     calmar = cagr / max_dd if max_dd > 0 else 0.0
 
     # Win/Loss analysis
-    wins = [t for t in trades if t.pnl > 0]
-    losses = [t for t in trades if t.pnl <= 0]
+    wins = [t for t in valid_trades if t.pnl > 0]
+    losses = [t for t in valid_trades if t.pnl <= 0]
     winning = len(wins)
     losing = len(losses)
     win_rate = (winning / total_trades * 100) if total_trades > 0 else 0
@@ -139,7 +142,7 @@ def calculate_metrics(
     # Max consecutive losses
     max_consec = 0
     current_consec = 0
-    for t in trades:
+    for t in valid_trades:
         if t.pnl <= 0:
             current_consec += 1
             max_consec = max(max_consec, current_consec)
@@ -147,7 +150,7 @@ def calculate_metrics(
             current_consec = 0
 
     # Avg holding
-    holding_bars = [t.exit_bar - t.entry_bar for t in trades]
+    holding_bars = [t.exit_bar - t.entry_bar for t in valid_trades]
     avg_holding = float(np.mean(holding_bars)) if holding_bars else 0
 
     # Deploy readiness check

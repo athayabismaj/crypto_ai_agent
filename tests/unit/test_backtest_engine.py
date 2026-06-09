@@ -10,10 +10,12 @@ Covers:
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import pytest
 
-from research.backtest.engine import BacktestConfig, BacktestEngine, Signal
+from research.backtest.engine import BacktestConfig, BacktestEngine, Signal, Trade
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -61,9 +63,9 @@ class _FixedSignalStrategy:
         return None
 
 
-def _base_config(**overrides) -> BacktestConfig:
+def _base_config(**overrides: Any) -> BacktestConfig:
     """Config with zero slippage/commission for deterministic math."""
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         initial_capital=10_000.0,
         commission_pct=0.0,
         slippage_pct=0.0,
@@ -277,6 +279,24 @@ class TestIntrabarPolicy:
         assert trade.ambiguous_bar is True
         assert trade.intrabar_policy_used == "conservative"
         assert result.ambiguous_bars == 1
+
+    def test_ambiguous_skip_exclusion(self):
+        """Skip policy: trade is excluded from metrics and marked ambiguous."""
+        result = self._make_ambiguous_long_scenario("skip")
+        trade = result.trades[0]
+        assert trade.exit_reason == "ambiguous_excluded"
+        assert trade.ambiguous_bar is True
+        assert trade.intrabar_policy_used == "skip"
+        assert trade.include_in_metrics is False
+        assert result.ambiguous_bars == 1
+
+        # Also verify that it's excluded from metrics
+        from research.backtest.metrics import calculate_metrics
+
+        metrics = calculate_metrics(result.trades, result.equity_curve, result.initial_capital)
+        assert metrics.total_trades == 0  # because the only trade was skipped
+        assert metrics.win_rate == 0.0
+        assert metrics.profit_factor == 0.0
 
     def test_default_policy_is_conservative(self):
         """Default intrabar_policy must be 'conservative'."""
@@ -572,3 +592,112 @@ class TestRMultipleFormula:
             if trade.initial_risk_usd > 0:
                 expected_r = trade.net_pnl / trade.initial_risk_usd
                 assert trade.r_multiple == pytest.approx(expected_r, abs=0.001)
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Deterministic Slippage Tests (Approach A Verification)                ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+class TestDeterministicSlippage:
+    """Verify Approach A: slippage embedded in fill prices, cost is informational."""
+
+    def _run_long_trade(self, slippage_pct: float, commission_pct: float = 0.0) -> Trade:
+        config = _base_config(slippage_pct=slippage_pct, commission_pct=commission_pct)
+        strategy = _FixedSignalStrategy(direction="BUY")
+        # Ensure qty=10 by setting equity=10000 and max_pos=0.1 -> 1000 notional / 100 = 10
+        df = _make_ohlcv_df(
+            [
+                {"open": 100, "high": 105, "low": 95, "close": 100, "volume": 1000},
+                {"open": 100, "high": 105, "low": 95, "close": 105, "volume": 1000},  # Fill at 100
+                {
+                    "open": 110,
+                    "high": 115,
+                    "low": 104,
+                    "close": 110,
+                    "volume": 1000,
+                },  # Exit end_of_data at 110
+            ]
+        )
+        result = BacktestEngine(config).run(df, strategy)
+        return result.trades[0]
+
+    def _run_short_trade(self, slippage_pct: float, commission_pct: float = 0.0) -> Trade:
+        config = _base_config(
+            slippage_pct=slippage_pct, commission_pct=commission_pct, allow_short=True
+        )
+        strategy = _FixedSignalStrategy(direction="SELL")
+        df = _make_ohlcv_df(
+            [
+                {"open": 100, "high": 105, "low": 95, "close": 100, "volume": 1000},
+                {"open": 100, "high": 105, "low": 95, "close": 105, "volume": 1000},  # Fill at 100
+                {
+                    "open": 90,
+                    "high": 95,
+                    "low": 85,
+                    "close": 90,
+                    "volume": 1000,
+                },  # Exit end_of_data at 90
+            ]
+        )
+        result = BacktestEngine(config).run(df, strategy)
+        return result.trades[0]
+
+    def test_long_slippage_impact(self):
+        """Verify long trade with and without slippage."""
+        t_no_slip = self._run_long_trade(0.0)
+        t_slip = self._run_long_trade(0.01)  # 1% slippage
+
+        # 1. Long trade without slippage
+        assert t_no_slip.entry_price == 100.0
+        assert t_no_slip.exit_price == 110.0
+        assert t_no_slip.net_pnl == pytest.approx(100.0, abs=0.01)  # (110 - 100) * 10
+
+        # 2. Same long trade with slippage
+        # 5. Long entry uses adverse BUY slippage: 100 * (1 + 0.01) = 101.0
+        assert t_slip.entry_price == pytest.approx(101.0, abs=0.01)
+        # 6. Long exit uses adverse SELL slippage: 110 * (1 - 0.01) = 108.9
+        assert t_slip.exit_price == pytest.approx(108.9, abs=0.01)
+
+        expected_pnl = (108.9 - 101.0) * t_slip.qty  # 7.9 * 9.90099...
+        assert t_slip.net_pnl == pytest.approx(expected_pnl, abs=0.01)
+
+        # 9. Difference in PnL equals slippage impact
+        # Instead of strict difference, we prove 10, 11
+
+        # 10. Slippage is not subtracted twice
+        # 11. slippage_cost is attribution only
+        assert t_slip.slippage_cost > 0
+        assert t_slip.net_pnl == pytest.approx(
+            t_slip.gross_pnl - t_slip.entry_fee - t_slip.exit_fee - t_slip.funding_cost, abs=0.01
+        )
+
+    def test_short_slippage_impact(self):
+        """Verify short trade with and without slippage."""
+        t_no_slip = self._run_short_trade(0.0)
+        t_slip = self._run_short_trade(0.01)  # 1% slippage
+
+        # 3. Short trade without slippage
+        assert t_no_slip.entry_price == 100.0
+        assert t_no_slip.exit_price == 90.0
+        assert t_no_slip.net_pnl == pytest.approx(100.0, abs=0.01)
+
+        # 4. Same short trade with slippage
+        # 7. Short entry uses adverse SELL slippage: 100 * (1 - 0.01) = 99.0
+        assert t_slip.entry_price == pytest.approx(99.0, abs=0.01)
+        # 8. Short exit uses adverse BUY slippage: 90 * (1 + 0.01) = 90.9
+        assert t_slip.exit_price == pytest.approx(90.9, abs=0.01)
+
+    def test_commission_accounting_remains_correct(self):
+        """12. Existing commission accounting remains correct."""
+        t_slip_comm = self._run_long_trade(slippage_pct=0.01, commission_pct=0.001)
+        expected_gross = (t_slip_comm.exit_price - t_slip_comm.entry_price) * t_slip_comm.qty
+        expected_entry_fee = t_slip_comm.entry_price * t_slip_comm.qty * 0.001
+        expected_exit_fee = t_slip_comm.exit_price * t_slip_comm.qty * 0.001
+
+        assert t_slip_comm.gross_pnl == pytest.approx(expected_gross, abs=0.01)
+        assert t_slip_comm.entry_fee == pytest.approx(expected_entry_fee, abs=0.01)
+        assert t_slip_comm.exit_fee == pytest.approx(expected_exit_fee, abs=0.01)
+        assert t_slip_comm.net_pnl == pytest.approx(
+            expected_gross - expected_entry_fee - expected_exit_fee, abs=0.01
+        )

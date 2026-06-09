@@ -3,10 +3,8 @@ Unit tests for news_layer — aggregator, sentiment, and calendar.
 All external API calls are mocked. No network required.
 """
 
-import asyncio
-import json
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,7 +17,6 @@ from runtime.agent.news_layer.aggregator import (
     NewsAggregator,
 )
 from runtime.agent.news_layer.calendar import (
-    CalendarStatus,
     EconomicCalendar,
     EconomicEvent,
     EventImpact,
@@ -28,7 +25,6 @@ from runtime.agent.news_layer.sentiment import (
     SentimentAnalyzer,
     SentimentResult,
 )
-
 
 # =====================================================================
 # AGGREGATOR TESTS

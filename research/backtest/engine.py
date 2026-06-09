@@ -107,6 +107,7 @@ class Trade:
     planned_rr: float = 0.0
     ambiguous_bar: bool = False
     intrabar_policy_used: str = ""
+    include_in_metrics: bool = True
 
     @property
     def pnl(self) -> float:
@@ -127,9 +128,8 @@ class BacktestResult:
 class StrategyProtocol(Protocol):
     """Kontrak minimal yang harus dipenuhi oleh strategy."""
 
-    def on_candle(
-        self, candle: dict, position: Position | None, equity: float
-    ) -> Signal | None: ...
+    def on_candle(self, candle: dict, position: Position | None, equity: float) -> Signal | None:
+        ...
 
 
 # ── Internal helper for _check_exit return value ──────────────────────────
@@ -572,6 +572,12 @@ class BacktestEngine:
         else:
             r_multiple = 0.0
 
+        # Exclusion for ambiguous "skip" trades
+        include_in_metrics = True
+        if reason == "ambiguous_close":
+            reason = "ambiguous_excluded"
+            include_in_metrics = False
+
         return Trade(
             entry_bar=pos.entry_bar,
             exit_bar=bar,
@@ -593,4 +599,5 @@ class BacktestEngine:
             planned_rr=pos.planned_rr,
             ambiguous_bar=is_ambiguous,
             intrabar_policy_used=policy_used,
+            include_in_metrics=include_in_metrics,
         )
