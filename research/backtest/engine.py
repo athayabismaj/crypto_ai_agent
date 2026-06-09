@@ -2,6 +2,17 @@
 engine.py — Event-Driven Backtest Engine
 Proses candle satu per satu secara kronologis.
 ATURAN: Signal candle T di-fill pada open candle T+1 (lookahead protection).
+
+Slippage convention (Approach A — embedded in fill prices):
+    Fill prices include adverse slippage.  slippage_cost is recorded as
+    an informational field only — it is NOT subtracted again in net_pnl.
+    Gross PnL uses the slipped fill prices directly.
+
+    BUY  action → fill = raw_price × (1 + slippage_pct)
+    SELL action → fill = raw_price × (1 − slippage_pct)
+
+    Long  entry = BUY ,  Long  exit = SELL
+    Short entry = SELL,  Short exit = BUY
 """
 
 from __future__ import annotations
@@ -11,6 +22,13 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 import pandas as pd
+
+from research.backtest.execution import (
+    apply_adverse_slippage,
+    calc_slippage_cost,
+    calc_trade_levels,
+    signal_to_distances,
+)
 
 log = logging.getLogger(__name__)
 
@@ -35,16 +53,21 @@ class Signal:
     confidence: float  # 0.0 - 1.0
     sl_price: float = 0.0
     tp_price: float = 0.0
+    signal_close: float = 0.0  # close of the candle that generated this signal
+    stop_distance: float = 0.0  # absolute price distance from close to SL
+    target_rr: float = 0.0  # target reward-to-risk ratio
 
 
 @dataclass
 class Position:
-    entry_price: float
+    entry_price: float  # actual fill price (with slippage)
     qty: float
     side: str  # "LONG" | "SHORT"
     sl_price: float
     tp_price: float
     entry_bar: int
+    raw_entry_price: float = 0.0  # raw price before slippage
+    entry_slippage_cost: float = 0.0  # informational slippage on entry
     peak_price: float = 0.0
     trailing_active: bool = False
 
@@ -133,9 +156,11 @@ class BacktestEngine:
 
             # ── STEP 1: Update posisi existing (SL/TP/Trailing) ──
             if position is not None:
-                exit_reason, exit_price = self._check_exit(position, candle)
+                exit_reason, raw_exit, exit_fill = self._check_exit(position, candle)
                 if exit_reason:
-                    trade = self._close_position(position, exit_price, i, exit_reason, equity)
+                    trade = self._close_position(
+                        position, exit_fill, raw_exit, i, exit_reason, equity
+                    )
                     trades.append(trade)
                     equity += trade.net_pnl
                     position = None
@@ -145,8 +170,7 @@ class BacktestEngine:
 
             # ── STEP 2: Fill pending signal dari candle sebelumnya ──
             if pending_signal is not None and position is None:
-                fill_price = candle["open"] * (1 + self.cfg.slippage_pct)
-                position = self._open_position(pending_signal, fill_price, i, equity)
+                position = self._open_position(pending_signal, candle["open"], i, equity)
                 pending_signal = None
 
             # ── STEP 3: Generate signal untuk candle INI ──
@@ -157,19 +181,31 @@ class BacktestEngine:
                 if score > 0.05 and position is None:
                     # Hitung SL/TP berbasis ATR jika tersedia
                     atr = row.get("atr_14", candle["close"] * 0.02)
+                    close = candle["close"]
+                    stop_dist = atr * self.cfg.sl_atr_multiplier
+                    target_rr = self.cfg.tp_atr_multiplier / self.cfg.sl_atr_multiplier
                     pending_signal = Signal(
                         direction="BUY",
                         confidence=min(abs(score), 1.0),
-                        sl_price=candle["close"] - atr * self.cfg.sl_atr_multiplier,
-                        tp_price=candle["close"] + atr * self.cfg.tp_atr_multiplier,
+                        sl_price=close - stop_dist,
+                        tp_price=close + atr * self.cfg.tp_atr_multiplier,
+                        signal_close=close,
+                        stop_distance=stop_dist,
+                        target_rr=target_rr,
                     )
                 elif score < -0.05 and position is None and self.cfg.allow_short:
                     atr = row.get("atr_14", candle["close"] * 0.02)
+                    close = candle["close"]
+                    stop_dist = atr * self.cfg.sl_atr_multiplier
+                    target_rr = self.cfg.tp_atr_multiplier / self.cfg.sl_atr_multiplier
                     pending_signal = Signal(
                         direction="SELL",
                         confidence=min(abs(score), 1.0),
-                        sl_price=candle["close"] + atr * self.cfg.sl_atr_multiplier,
-                        tp_price=candle["close"] - atr * self.cfg.tp_atr_multiplier,
+                        sl_price=close + stop_dist,
+                        tp_price=close - atr * self.cfg.tp_atr_multiplier,
+                        signal_close=close,
+                        stop_distance=stop_dist,
+                        target_rr=target_rr,
                     )
             elif strategy is not None:
                 sig = strategy.on_candle(candle, position, equity)
@@ -183,10 +219,15 @@ class BacktestEngine:
             else:
                 equity_curve.append(equity)
 
-        # Close any remaining position at last close
+        # Close any remaining position at last close (with exit slippage)
         if position is not None:
             last = df.iloc[-1]
-            trade = self._close_position(position, last["close"], n - 1, "end_of_data", equity)
+            raw_exit = last["close"]
+            exit_action = "SELL" if position.side == "LONG" else "BUY"
+            exit_fill = apply_adverse_slippage(raw_exit, exit_action, self.cfg.slippage_pct)
+            trade = self._close_position(
+                position, exit_fill, raw_exit, n - 1, "end_of_data", equity
+            )
             trades.append(trade)
             equity += trade.net_pnl
 
@@ -203,51 +244,111 @@ class BacktestEngine:
             config=self.cfg,
         )
 
-    def _open_position(
-        self, signal: Signal, fill_price: float, bar: int, equity: float
-    ) -> Position:
-        """Buka posisi baru."""
+    def _open_position(self, signal: Signal, raw_open: float, bar: int, equity: float) -> Position:
+        """Buka posisi baru dengan adverse slippage dan fill-based SL/TP.
+
+        Entry action: BUY for LONG, SELL for SHORT.
+        SL/TP are recalculated from the actual fill price.
+        """
+        side = "LONG" if signal.direction == "BUY" else "SHORT"
+        entry_action = signal.direction  # BUY or SELL
+
+        # Apply adverse slippage to entry
+        fill_price = apply_adverse_slippage(raw_open, entry_action, self.cfg.slippage_pct)
+        entry_slip_cost = calc_slippage_cost(raw_open, fill_price, 1.0)
+
         max_notional = equity * self.cfg.max_position_pct
         qty = max_notional / fill_price
-        side = "LONG" if signal.direction == "BUY" else "SHORT"
+
+        # Scale slippage cost to actual quantity
+        entry_slip_cost = entry_slip_cost * qty
+
+        # Determine stop_distance and target_rr
+        if signal.stop_distance > 0 and signal.target_rr > 0:
+            # Signal already carries distances
+            stop_dist = signal.stop_distance
+            target_rr = signal.target_rr
+        elif signal.sl_price > 0 and signal.signal_close > 0:
+            # Convert absolute signal SL/TP to distances
+            stop_dist, target_rr = signal_to_distances(
+                signal.sl_price, signal.tp_price, signal.signal_close, side
+            )
+        elif signal.sl_price > 0:
+            # Legacy: signal has SL/TP but no signal_close.
+            # Use the raw_open as proxy for signal_close.
+            stop_dist, target_rr = signal_to_distances(
+                signal.sl_price, signal.tp_price, raw_open, side
+            )
+        else:
+            # No SL/TP information — use zero (no protective levels)
+            stop_dist = 0.0
+            target_rr = 0.0
+
+        # Calculate SL/TP from actual fill price
+        if stop_dist > 0 and target_rr > 0:
+            sl_price, tp_price = calc_trade_levels(fill_price, side, stop_dist, target_rr)
+        else:
+            sl_price = signal.sl_price
+            tp_price = signal.tp_price
 
         return Position(
             entry_price=fill_price,
             qty=qty,
             side=side,
-            sl_price=signal.sl_price,
-            tp_price=signal.tp_price,
+            sl_price=sl_price,
+            tp_price=tp_price,
             entry_bar=bar,
+            raw_entry_price=raw_open,
+            entry_slippage_cost=entry_slip_cost,
             peak_price=fill_price,
         )
 
-    def _check_exit(self, pos: Position, candle: dict) -> tuple[str, float]:
-        """Cek apakah posisi harus ditutup."""
+    def _check_exit(self, pos: Position, candle: dict) -> tuple[str, float, float]:
+        """Cek apakah posisi harus ditutup.
+
+        Returns:
+            (exit_reason, raw_exit_price, slipped_exit_price)
+            raw_exit_price is the trigger price before slippage.
+            slipped_exit_price has adverse slippage applied.
+        """
         high, low = candle["high"], candle["low"]
 
         if pos.side == "LONG":
-            # SL hit
+            # SL hit — exit action is SELL
             if pos.sl_price > 0 and low <= pos.sl_price:
-                return "stop_loss", pos.sl_price
-            # TP hit
+                raw = pos.sl_price
+                slipped = apply_adverse_slippage(raw, "SELL", self.cfg.slippage_pct)
+                return "stop_loss", raw, slipped
+            # TP hit — exit action is SELL
             if pos.tp_price > 0 and high >= pos.tp_price:
-                return "take_profit", pos.tp_price
-            # Trailing stop
+                raw = pos.tp_price
+                slipped = apply_adverse_slippage(raw, "SELL", self.cfg.slippage_pct)
+                return "take_profit", raw, slipped
+            # Trailing stop — exit action is SELL
             if pos.trailing_active:
                 trail_trigger = pos.peak_price * (1 - self.cfg.trailing_callback_pct)
                 if low <= trail_trigger:
-                    return "trailing_stop", trail_trigger
+                    slipped = apply_adverse_slippage(trail_trigger, "SELL", self.cfg.slippage_pct)
+                    return "trailing_stop", trail_trigger, slipped
         else:  # SHORT
+            # SL hit — exit action is BUY
             if pos.sl_price > 0 and high >= pos.sl_price:
-                return "stop_loss", pos.sl_price
+                raw = pos.sl_price
+                slipped = apply_adverse_slippage(raw, "BUY", self.cfg.slippage_pct)
+                return "stop_loss", raw, slipped
+            # TP hit — exit action is BUY
             if pos.tp_price > 0 and low <= pos.tp_price:
-                return "take_profit", pos.tp_price
+                raw = pos.tp_price
+                slipped = apply_adverse_slippage(raw, "BUY", self.cfg.slippage_pct)
+                return "take_profit", raw, slipped
+            # Trailing stop — exit action is BUY
             if pos.trailing_active:
                 trail_trigger = pos.peak_price * (1 + self.cfg.trailing_callback_pct)
                 if high >= trail_trigger:
-                    return "trailing_stop", trail_trigger
+                    slipped = apply_adverse_slippage(trail_trigger, "BUY", self.cfg.slippage_pct)
+                    return "trailing_stop", trail_trigger, slipped
 
-        return "", 0.0
+        return "", 0.0, 0.0
 
     def _update_trailing(self, pos: Position, candle: dict) -> None:
         """Update peak price dan activate trailing jika threshold tercapai."""
@@ -272,36 +373,54 @@ class BacktestEngine:
             return (pos.entry_price - current_price) * pos.qty
 
     def _close_position(
-        self, pos: Position, exit_price: float, bar: int, reason: str, equity: float
+        self,
+        pos: Position,
+        exit_fill: float,
+        raw_exit: float,
+        bar: int,
+        reason: str,
+        equity: float,
     ) -> Trade:
         """Tutup posisi dan hitung realized PnL.
 
+        Slippage convention — Approach A (embedded in fill prices):
+          entry_price and exit_fill already include adverse slippage.
+          gross_pnl uses these slipped prices directly.
+          slippage_cost is INFORMATIONAL only — NOT subtracted from net_pnl.
+
         Accounting:
-          gross_pnl = price movement profit/loss (before all costs)
-          entry_fee = entry_notional * commission_pct
-          exit_fee  = exit_notional * commission_pct
-          net_pnl   = gross_pnl - entry_fee - exit_fee - slippage_cost - funding_cost
+          gross_pnl = price movement using slipped fill prices
+          entry_fee = entry_notional × commission_pct
+          exit_fee  = exit_notional × commission_pct
+          slippage_cost = informational (entry + exit slippage in dollars)
+          net_pnl   = gross_pnl - entry_fee - exit_fee - funding_cost
+                      (slippage_cost is NOT subtracted — already in prices)
 
         Commission is deducted EXACTLY ONCE, inside net_pnl.
         Equity must be updated with net_pnl only.
         """
-        # Gross PnL: pure price movement
+        # Gross PnL: uses slipped fill prices
         if pos.side == "LONG":
-            gross_pnl = (exit_price - pos.entry_price) * pos.qty
+            gross_pnl = (exit_fill - pos.entry_price) * pos.qty
         else:
-            gross_pnl = (pos.entry_price - exit_price) * pos.qty
+            gross_pnl = (pos.entry_price - exit_fill) * pos.qty
 
         # Cost breakdown
         entry_notional = pos.entry_price * pos.qty
-        exit_notional = exit_price * pos.qty
+        exit_notional = exit_fill * pos.qty
         entry_fee = entry_notional * self.cfg.commission_pct
         exit_fee = exit_notional * self.cfg.commission_pct
-        slippage_cost = 0.0  # placeholder for future slippage model
         funding_cost = 0.0  # placeholder for future funding rate model
 
-        # Net PnL: single deduction of all costs
+        # Slippage cost: informational only (Approach A)
+        # Entry slippage already recorded on position
+        exit_slippage_cost = calc_slippage_cost(raw_exit, exit_fill, pos.qty)
+        slippage_cost = pos.entry_slippage_cost + exit_slippage_cost
+
+        # Net PnL: commission deducted once; slippage NOT subtracted
+        # (already embedded in gross_pnl via fill prices)
         commission = entry_fee + exit_fee
-        net_pnl = gross_pnl - entry_fee - exit_fee - slippage_cost - funding_cost
+        net_pnl = gross_pnl - entry_fee - exit_fee - funding_cost
 
         pnl_pct = gross_pnl / entry_notional * 100 if pos.entry_price > 0 else 0
 
@@ -310,7 +429,7 @@ class BacktestEngine:
             exit_bar=bar,
             side=pos.side,
             entry_price=pos.entry_price,
-            exit_price=exit_price,
+            exit_price=exit_fill,
             qty=pos.qty,
             gross_pnl=gross_pnl,
             net_pnl=net_pnl,
