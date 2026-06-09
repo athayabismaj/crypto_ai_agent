@@ -47,6 +47,8 @@ class BacktestMetrics:
     avg_loss_pct: float
     max_consecutive_loss: int
     avg_holding_bars: float
+    has_equity_metric_exclusions: bool
+    equity_metrics_valid_for_deployment: bool
     deploy_ready: bool
     deploy_failures: list[str]
 
@@ -98,8 +100,12 @@ def calculate_metrics(
     """
     Hitung semua metrik dari hasil backtest.
     """
-    # Exclude non-metric trades
+    # Exclude non-metric trades for trade-based metrics
     valid_trades = [t for t in trades if t.include_in_metrics]
+    excluded_trades = [t for t in trades if not t.include_in_metrics]
+    has_equity_metric_exclusions = len(excluded_trades) > 0
+    equity_metrics_valid_for_deployment = not has_equity_metric_exclusions
+
     total_trades = len(valid_trades)
     final_equity = equity_curve[-1] if equity_curve else initial_capital
 
@@ -166,6 +172,10 @@ def calculate_metrics(
     if total_trades < DEPLOY_THRESHOLDS["min_trades"]:
         failures.append(f"Trades={total_trades} < {DEPLOY_THRESHOLDS['min_trades']}")
 
+    # Hotfix Phase 1.1: Reject deployment if equity curve is contaminated by excluded trades
+    if has_equity_metric_exclusions:
+        failures.append("excluded_trades_invalidate_equity_metrics")
+
     deploy_ready = len(failures) == 0
 
     metrics = BacktestMetrics(
@@ -185,6 +195,8 @@ def calculate_metrics(
         avg_loss_pct=avg_loss_pct,
         max_consecutive_loss=max_consec,
         avg_holding_bars=avg_holding,
+        has_equity_metric_exclusions=has_equity_metric_exclusions,
+        equity_metrics_valid_for_deployment=equity_metrics_valid_for_deployment,
         deploy_ready=deploy_ready,
         deploy_failures=failures,
     )

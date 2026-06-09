@@ -92,3 +92,11 @@ All accounting, slippage, gap, and intrabar exclusion invariants are proven via 
 ## 15. Confirmation
 **Phase 2 was NOT started.**
 Risk-based position sizing was not implemented. Strategy thresholds were not changed. Model parameters were not changed. Database code was not modified. No live order was sent.
+
+## 16. Excluded Trades and Equity-Based Metrics
+1. Excluded ambiguous trades remain in the raw trade list.
+2. They do not affect trade-based metrics.
+3. Their PnL may remain in the primary account equity curve.
+4. Therefore equity-based metrics are diagnostic only for such runs.
+5. Any such run is automatically not deploy-ready.
+6. A separate filtered evaluation equity curve is deferred to Phase 3.

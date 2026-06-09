@@ -701,3 +701,156 @@ class TestDeterministicSlippage:
         assert t_slip_comm.net_pnl == pytest.approx(
             expected_gross - expected_entry_fee - expected_exit_fee, abs=0.01
         )
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Phase 1.1 Hotfix: Deploy Rejection on Equity Exclusion Tests          ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+class TestDeployValidityWithExclusions:
+    """Verify Phase 1.1 hotfix rules for excluding trades from equity metrics."""
+
+    def test_hotfix_rules(self):
+        from research.backtest.engine import Trade
+        from research.backtest.metrics import calculate_metrics
+
+        # Mock a clean trade (win)
+        t_clean = Trade(
+            entry_bar=1,
+            exit_bar=2,
+            side="BUY",
+            entry_price=100,
+            exit_price=110,
+            qty=10,
+            gross_pnl=100,
+            net_pnl=100,
+            pnl_pct=10,
+            exit_reason="take_profit",
+            entry_fee=0,
+            exit_fee=0,
+            slippage_cost=0,
+            funding_cost=0,
+            commission=0,
+            initial_risk_usd=50,
+            r_multiple=2.0,
+            planned_rr=2.0,
+            ambiguous_bar=False,
+            intrabar_policy_used="conservative",
+            include_in_metrics=True,
+        )
+
+        # Mock an excluded ambiguous trade
+        t_skip = Trade(
+            entry_bar=3,
+            exit_bar=4,
+            side="BUY",
+            entry_price=100,
+            exit_price=105,
+            qty=10,
+            gross_pnl=50,
+            net_pnl=50,
+            pnl_pct=5,
+            exit_reason="ambiguous_excluded",
+            entry_fee=0,
+            exit_fee=0,
+            slippage_cost=0,
+            funding_cost=0,
+            commission=0,
+            initial_risk_usd=50,
+            r_multiple=1.0,
+            planned_rr=2.0,
+            ambiguous_bar=True,
+            intrabar_policy_used="skip",
+            include_in_metrics=False,
+        )
+
+        t_loss = Trade(
+            entry_bar=1,
+            exit_bar=2,
+            side="BUY",
+            entry_price=100,
+            exit_price=90,
+            qty=10,
+            gross_pnl=-100,
+            net_pnl=-100,
+            pnl_pct=-10,
+            exit_reason="stop_loss",
+            entry_fee=0,
+            exit_fee=0,
+            slippage_cost=0,
+            funding_cost=0,
+            commission=0,
+            initial_risk_usd=100,
+            r_multiple=-1.0,
+            planned_rr=2.0,
+            ambiguous_bar=False,
+            intrabar_policy_used="conservative",
+            include_in_metrics=True,
+        )
+
+        # Test 1 & 2 & 3: Skip trade remains auditable & metrics exclude it & deployment rejected
+        # To make it pass normal deploy metrics without the skip trade, we simulate 34 winning trades and 1 loss.
+        trades = [t_clean] * 34 + [t_loss] + [t_skip]
+        # Equity curve simulating steady growth to have high Sharpe
+        eq_curve = [10000.0 + i * 100 for i in range(37)]
+
+        metrics = calculate_metrics(trades, eq_curve, 10000.0, n_days=365)
+
+        # Test 1
+        assert t_skip.ambiguous_bar is True
+        assert t_skip.include_in_metrics is False
+        assert t_skip.exit_reason == "ambiguous_excluded"
+
+        # Test 2
+        assert metrics.total_trades == 35  # skip trade excluded
+        assert metrics.winning_trades == 34
+        assert metrics.win_rate == pytest.approx((34 / 35) * 100, abs=0.1)
+        assert metrics.profit_factor > 1.0  # no losses, handle divide by 0
+
+        # Test 3 & 4: Deployment is rejected despite strong metrics
+        assert metrics.has_equity_metric_exclusions is True
+        assert metrics.equity_metrics_valid_for_deployment is False
+        assert metrics.deploy_ready is False
+        assert "excluded_trades_invalidate_equity_metrics" in metrics.deploy_failures
+
+        # Test 5: Conservative policy unaffected
+        trades_cons = [t_clean] * 34 + [t_loss]
+        metrics_cons = calculate_metrics(trades_cons, eq_curve, 10000.0, n_days=365)
+
+        assert metrics_cons.has_equity_metric_exclusions is False
+        assert metrics_cons.equity_metrics_valid_for_deployment is True
+        # Since it's 34 winning trades and 1 loss, high sharpe, it should be deploy ready
+        assert metrics_cons.deploy_ready is True
+        assert "excluded_trades_invalidate_equity_metrics" not in metrics_cons.deploy_failures
+
+        # Test 6: Non-ambiguous excluded trade behavior
+        t_other_exclude = Trade(
+            entry_bar=5,
+            exit_bar=6,
+            side="BUY",
+            entry_price=100,
+            exit_price=105,
+            qty=10,
+            gross_pnl=50,
+            net_pnl=50,
+            pnl_pct=5,
+            exit_reason="some_other_exclude",
+            entry_fee=0,
+            exit_fee=0,
+            slippage_cost=0,
+            funding_cost=0,
+            commission=0,
+            initial_risk_usd=50,
+            r_multiple=1.0,
+            planned_rr=2.0,
+            ambiguous_bar=False,
+            intrabar_policy_used="",
+            include_in_metrics=False,
+        )
+        trades_other = [t_clean] * 34 + [t_loss] + [t_other_exclude]
+        metrics_other = calculate_metrics(trades_other, eq_curve, 10000.0, n_days=365)
+
+        assert metrics_other.has_equity_metric_exclusions is True
+        assert metrics_other.deploy_ready is False
+        assert "excluded_trades_invalidate_equity_metrics" in metrics_other.deploy_failures
