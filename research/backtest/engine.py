@@ -13,6 +13,16 @@ Slippage convention (Approach A — embedded in fill prices):
 
     Long  entry = BUY ,  Long  exit = SELL
     Short entry = SELL,  Short exit = BUY
+
+Gap handling:
+    If candle opens beyond the stop level, exit at the (adverse) open price,
+    not the original stop.  If candle opens beyond the TP level, exit at the
+    (favorable) open price, not the original TP.
+
+Intrabar ambiguity:
+    When the same candle touches both SL and TP, the intrabar_policy controls
+    the assumed fill: "conservative" (SL first), "optimistic" (TP first),
+    or "skip" (close at candle close, marked ambiguous).
 """
 
 from __future__ import annotations
@@ -45,6 +55,7 @@ class BacktestConfig:
     tp_atr_multiplier: float = 3.0
     trailing_activation_pct: float = 0.03  # 3% profit → activate trailing
     trailing_callback_pct: float = 0.015  # 1.5% pullback → close
+    intrabar_policy: str = "conservative"  # "conservative" | "optimistic" | "skip"
 
 
 @dataclass
@@ -68,6 +79,8 @@ class Position:
     entry_bar: int
     raw_entry_price: float = 0.0  # raw price before slippage
     entry_slippage_cost: float = 0.0  # informational slippage on entry
+    initial_stop_price: float = 0.0  # SL at entry time, never modified
+    planned_rr: float = 0.0  # planned reward/risk ratio at entry
     peak_price: float = 0.0
     trailing_active: bool = False
 
@@ -88,7 +101,12 @@ class Trade:
     exit_fee: float
     slippage_cost: float
     funding_cost: float
-    commission: float  # total commission (entry_fee + exit_fee), kept for backward compat
+    commission: float  # total commission (entry_fee + exit_fee), backward compat
+    initial_risk_usd: float = 0.0
+    r_multiple: float = 0.0
+    planned_rr: float = 0.0
+    ambiguous_bar: bool = False
+    intrabar_policy_used: str = ""
 
     @property
     def pnl(self) -> float:
@@ -103,6 +121,7 @@ class BacktestResult:
     initial_capital: float
     final_equity: float
     config: BacktestConfig
+    ambiguous_bars: int = 0
 
 
 class StrategyProtocol(Protocol):
@@ -111,6 +130,27 @@ class StrategyProtocol(Protocol):
     def on_candle(
         self, candle: dict, position: Position | None, equity: float
     ) -> Signal | None: ...
+
+
+# ── Internal helper for _check_exit return value ──────────────────────────
+
+
+@dataclass
+class _ExitInfo:
+    """Intermediate result from _check_exit."""
+
+    reason: str
+    raw_price: float
+    fill_price: float
+    is_ambiguous: bool = False
+    policy_used: str = ""
+
+    @property
+    def triggered(self) -> bool:
+        return self.reason != ""
+
+
+_NO_EXIT = _ExitInfo(reason="", raw_price=0.0, fill_price=0.0)
 
 
 class BacktestEngine:
@@ -139,6 +179,7 @@ class BacktestEngine:
         trades: list[Trade] = []
         equity_curve: list[float] = [equity]
         pending_signal: Signal | None = None
+        ambiguous_bars = 0
 
         n = len(df)
         log.info(f"Backtest dimulai: {n} candle, capital=${self.cfg.initial_capital:,.2f}")
@@ -156,14 +197,23 @@ class BacktestEngine:
 
             # ── STEP 1: Update posisi existing (SL/TP/Trailing) ──
             if position is not None:
-                exit_reason, raw_exit, exit_fill = self._check_exit(position, candle)
-                if exit_reason:
+                exit_info = self._check_exit(position, candle)
+                if exit_info.triggered:
                     trade = self._close_position(
-                        position, exit_fill, raw_exit, i, exit_reason, equity
+                        position,
+                        exit_info.fill_price,
+                        exit_info.raw_price,
+                        i,
+                        exit_info.reason,
+                        equity,
+                        exit_info.is_ambiguous,
+                        exit_info.policy_used,
                     )
                     trades.append(trade)
                     equity += trade.net_pnl
                     position = None
+                    if exit_info.is_ambiguous:
+                        ambiguous_bars += 1
                 else:
                     # Update trailing
                     self._update_trailing(position, candle)
@@ -242,6 +292,7 @@ class BacktestEngine:
             initial_capital=self.cfg.initial_capital,
             final_equity=equity,
             config=self.cfg,
+            ambiguous_bars=ambiguous_bars,
         )
 
     def _open_position(self, signal: Signal, raw_open: float, bar: int, equity: float) -> Position:
@@ -300,55 +351,139 @@ class BacktestEngine:
             entry_bar=bar,
             raw_entry_price=raw_open,
             entry_slippage_cost=entry_slip_cost,
+            initial_stop_price=sl_price,  # frozen at entry
+            planned_rr=target_rr,
             peak_price=fill_price,
         )
 
-    def _check_exit(self, pos: Position, candle: dict) -> tuple[str, float, float]:
-        """Cek apakah posisi harus ditutup.
+    def _check_exit(self, pos: Position, candle: dict) -> _ExitInfo:
+        """Check whether a position should be closed.
 
-        Returns:
-            (exit_reason, raw_exit_price, slipped_exit_price)
-            raw_exit_price is the trigger price before slippage.
-            slipped_exit_price has adverse slippage applied.
+        Handles:
+          1. Gap-through stops  — exit at adverse candle open, not the stop.
+          2. Gap-through TPs    — exit at favorable candle open, not the TP.
+          3. Intrabar ambiguity — when the same candle touches both SL and TP.
+          4. Trailing stop.
         """
-        high, low = candle["high"], candle["low"]
+        open_px, high, low, close = (
+            candle["open"],
+            candle["high"],
+            candle["low"],
+            candle["close"],
+        )
+        slip = self.cfg.slippage_pct
+        exit_action = "SELL" if pos.side == "LONG" else "BUY"
+
+        # ── Determine individual trigger flags ────────────────────────
 
         if pos.side == "LONG":
-            # SL hit — exit action is SELL
-            if pos.sl_price > 0 and low <= pos.sl_price:
-                raw = pos.sl_price
-                slipped = apply_adverse_slippage(raw, "SELL", self.cfg.slippage_pct)
-                return "stop_loss", raw, slipped
-            # TP hit — exit action is SELL
-            if pos.tp_price > 0 and high >= pos.tp_price:
-                raw = pos.tp_price
-                slipped = apply_adverse_slippage(raw, "SELL", self.cfg.slippage_pct)
-                return "take_profit", raw, slipped
-            # Trailing stop — exit action is SELL
-            if pos.trailing_active:
+            sl_gap = pos.sl_price > 0 and open_px <= pos.sl_price
+            sl_normal = pos.sl_price > 0 and low <= pos.sl_price and not sl_gap
+            tp_gap = pos.tp_price > 0 and open_px >= pos.tp_price
+            tp_normal = pos.tp_price > 0 and high >= pos.tp_price and not tp_gap
+        else:  # SHORT
+            sl_gap = pos.sl_price > 0 and open_px >= pos.sl_price
+            sl_normal = pos.sl_price > 0 and high >= pos.sl_price and not sl_gap
+            tp_gap = pos.tp_price > 0 and open_px <= pos.tp_price
+            tp_normal = pos.tp_price > 0 and low <= pos.tp_price and not tp_gap
+
+        sl_hit = sl_gap or sl_normal
+        tp_hit = tp_gap or tp_normal
+
+        # ── Intrabar ambiguity ────────────────────────────────────────
+
+        if sl_hit and tp_hit:
+            # Both SL and TP triggered in the same candle
+            policy = self.cfg.intrabar_policy
+
+            if policy == "optimistic":
+                # Assume TP hit first
+                if tp_gap:
+                    raw = open_px
+                else:
+                    raw = pos.tp_price
+                fill = apply_adverse_slippage(raw, exit_action, slip)
+                return _ExitInfo(
+                    reason="take_profit",
+                    raw_price=raw,
+                    fill_price=fill,
+                    is_ambiguous=True,
+                    policy_used=policy,
+                )
+            elif policy == "skip":
+                # Close at candle close (ambiguous, no fabricated order)
+                raw = close
+                fill = apply_adverse_slippage(raw, exit_action, slip)
+                return _ExitInfo(
+                    reason="ambiguous_close",
+                    raw_price=raw,
+                    fill_price=fill,
+                    is_ambiguous=True,
+                    policy_used=policy,
+                )
+            else:
+                # "conservative" — assume SL hit first (default)
+                if sl_gap:
+                    raw = open_px
+                else:
+                    raw = pos.sl_price
+                fill = apply_adverse_slippage(raw, exit_action, slip)
+                return _ExitInfo(
+                    reason="stop_loss",
+                    raw_price=raw,
+                    fill_price=fill,
+                    is_ambiguous=True,
+                    policy_used=policy,
+                )
+
+        # ── Single trigger (gap or normal) ────────────────────────────
+
+        # SL gap-through
+        if sl_gap:
+            raw = open_px  # adverse gap: worse than stop
+            fill = apply_adverse_slippage(raw, exit_action, slip)
+            return _ExitInfo(reason="stop_loss", raw_price=raw, fill_price=fill)
+
+        # TP gap-through
+        if tp_gap:
+            raw = open_px  # favorable gap: better than TP
+            fill = apply_adverse_slippage(raw, exit_action, slip)
+            return _ExitInfo(reason="take_profit", raw_price=raw, fill_price=fill)
+
+        # Normal SL
+        if sl_normal:
+            raw = pos.sl_price
+            fill = apply_adverse_slippage(raw, exit_action, slip)
+            return _ExitInfo(reason="stop_loss", raw_price=raw, fill_price=fill)
+
+        # Normal TP
+        if tp_normal:
+            raw = pos.tp_price
+            fill = apply_adverse_slippage(raw, exit_action, slip)
+            return _ExitInfo(reason="take_profit", raw_price=raw, fill_price=fill)
+
+        # Trailing stop
+        if pos.trailing_active:
+            if pos.side == "LONG":
                 trail_trigger = pos.peak_price * (1 - self.cfg.trailing_callback_pct)
                 if low <= trail_trigger:
-                    slipped = apply_adverse_slippage(trail_trigger, "SELL", self.cfg.slippage_pct)
-                    return "trailing_stop", trail_trigger, slipped
-        else:  # SHORT
-            # SL hit — exit action is BUY
-            if pos.sl_price > 0 and high >= pos.sl_price:
-                raw = pos.sl_price
-                slipped = apply_adverse_slippage(raw, "BUY", self.cfg.slippage_pct)
-                return "stop_loss", raw, slipped
-            # TP hit — exit action is BUY
-            if pos.tp_price > 0 and low <= pos.tp_price:
-                raw = pos.tp_price
-                slipped = apply_adverse_slippage(raw, "BUY", self.cfg.slippage_pct)
-                return "take_profit", raw, slipped
-            # Trailing stop — exit action is BUY
-            if pos.trailing_active:
+                    fill = apply_adverse_slippage(trail_trigger, exit_action, slip)
+                    return _ExitInfo(
+                        reason="trailing_stop",
+                        raw_price=trail_trigger,
+                        fill_price=fill,
+                    )
+            else:
                 trail_trigger = pos.peak_price * (1 + self.cfg.trailing_callback_pct)
                 if high >= trail_trigger:
-                    slipped = apply_adverse_slippage(trail_trigger, "BUY", self.cfg.slippage_pct)
-                    return "trailing_stop", trail_trigger, slipped
+                    fill = apply_adverse_slippage(trail_trigger, exit_action, slip)
+                    return _ExitInfo(
+                        reason="trailing_stop",
+                        raw_price=trail_trigger,
+                        fill_price=fill,
+                    )
 
-        return "", 0.0, 0.0
+        return _NO_EXIT
 
     def _update_trailing(self, pos: Position, candle: dict) -> None:
         """Update peak price dan activate trailing jika threshold tercapai."""
@@ -380,8 +515,14 @@ class BacktestEngine:
         bar: int,
         reason: str,
         equity: float,
+        is_ambiguous: bool = False,
+        policy_used: str = "",
     ) -> Trade:
         """Tutup posisi dan hitung realized PnL.
+
+        This is the SINGLE central close function.  Every close path
+        (stop_loss, take_profit, trailing_stop, ambiguous_close,
+        end_of_data) must call this function.
 
         Slippage convention — Approach A (embedded in fill prices):
           entry_price and exit_fill already include adverse slippage.
@@ -424,6 +565,13 @@ class BacktestEngine:
 
         pnl_pct = gross_pnl / entry_notional * 100 if pos.entry_price > 0 else 0
 
+        # Initial risk and R-multiple
+        initial_risk_usd = abs(pos.entry_price - pos.initial_stop_price) * pos.qty
+        if initial_risk_usd > 0:
+            r_multiple = net_pnl / initial_risk_usd
+        else:
+            r_multiple = 0.0
+
         return Trade(
             entry_bar=pos.entry_bar,
             exit_bar=bar,
@@ -440,4 +588,9 @@ class BacktestEngine:
             slippage_cost=slippage_cost,
             funding_cost=funding_cost,
             commission=commission,
+            initial_risk_usd=initial_risk_usd,
+            r_multiple=r_multiple,
+            planned_rr=pos.planned_rr,
+            ambiguous_bar=is_ambiguous,
+            intrabar_policy_used=policy_used,
         )
